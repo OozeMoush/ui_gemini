@@ -1,7 +1,7 @@
 {
   "vertex_ai_project_id": "***",
   "vertex_ai_location": "us-central1",
-  "root_directory": "**",
+  "root_directory": "***",
   "available_models": [
     "gemini-1.5-flash-001",
     "gemini-1.5-pro-001",
@@ -11,5 +11,16 @@
   "default_model": "gemini-2.5-pro-exp-03-25",
   "default_temperature": 0.1,
   "default_max_output_tokens": 65535,
-  "default_system_prompt": ""
+  "default_system_prompt": "",
+  "excluded_dirs": [
+    ".venv",
+    "venv",
+    "__pycache__",
+    "node_modules",
+    ".git",
+    ".vscode",
+    "dist",
+    "build",
+    "assets"
+  ]
 }
