@@ -21,10 +21,11 @@ temperature_label = ft.Text(f"{temperature_slider.value:.2f}", width=40)
 max_tokens_field = ft.TextField(label="MaxTok", value=str(config.get("default_max_output_tokens", 8192)), keyboard_type=ft.KeyboardType.NUMBER, tooltip="Max Output Tokens", width=100)
 system_prompt_field = ft.TextField(label="System Prompt", value=config.get("default_system_prompt", ""), tooltip="Optional system instruction", multiline=True, min_lines=1, max_lines=3, expand=True)
 
-# --- File Explorer Components ---
+# --- File Explorer Components (Reverting to simple Column) ---
+# Use dictionary to track checkboxes and their corresponding file paths
 file_checkboxes: dict[ft.Checkbox, str] = {}
-# Use ListView for the main container
-file_explorer_controls = ft.ListView(expand=True, spacing=0)
+# Revert to using Column for stability, sacrificing folding feature
+file_explorer_controls = ft.Column(scroll=ft.ScrollMode.ADAPTIVE, expand=True, spacing=0)
 
 # --- Other UI Components ---
 chat_history_display = ft.ListView(expand=True, spacing=10)
@@ -45,11 +46,12 @@ def extract_thinking(text: str) -> tuple[str, str]:
     main_content = pattern.sub(replace_thinking, text).strip()
     return "\n---\n".join(thinking_parts), main_content
 
+# Populate function for simple Column view (Reverted)
 def populate_file_explorer(root_dir_path: str):
     global file_checkboxes
     file_checkboxes.clear()
     file_explorer_controls.controls.clear()
-    logging.info(f"Populating file explorer (ListView) for: {root_dir_path}")
+    logging.info(f"Populating file explorer (Column - reverted) for: {root_dir_path}")
 
     try:
         root_path = pathlib.Path(root_dir_path).resolve()
@@ -76,73 +78,46 @@ def populate_file_explorer(root_dir_path: str):
             logging.warning(f"Could not load excluded_dirs from config, using defaults: {config_err}")
             excluded_dirs = default_excludes
 
-        def walk_directory(current_path: pathlib.Path) -> list[ft.Control]:
-            """Recursively walks directory, returns a list of Checkboxes and ExpansionPanels."""
-            controls = []
+        items_to_add = [] # List to hold controls
+
+        def walk_directory_simple(current_path: pathlib.Path, depth: int):
+            """Recursively walks directory, creating Text for dirs and Checkbox for files."""
+            prefix = "  " * depth # Indentation based on depth
             try:
-                for item in sorted(current_path.iterdir()):
+                # Sort: Dirs first, then files, case-insensitive
+                sorted_items = sorted(current_path.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower()))
+                for item in sorted_items:
                     if item.name.startswith('.') or item.name in excluded_dirs:
-                        logging.debug(f"Skipping hidden/excluded item: {item.name}")
                         continue
 
                     if item.is_dir():
-                        sub_items = walk_directory(item)
-                        if sub_items: # Only add if directory is not empty/fully excluded
-                            # Create the Column for the ExpansionPanel content
-                            content_column = ft.Column(spacing=0, tight=True)
-                            # Add all sub-items (files and sub-panels) directly to the column
-                            content_column.controls.extend(sub_items)
-
-                            panel = ft.ExpansionPanel(
-                                header=ft.ListTile(title=ft.Text(f"📁 {item.name}")),
-                                content=content_column,
-                            )
-                            controls.append(panel)
+                        # Add directory text with indentation
+                        items_to_add.append(ft.Text(f"{prefix}📁 {item.name}", opacity=0.7))
+                        # Recurse into subdirectory
+                        walk_directory_simple(item, depth + 1)
                     elif item.is_file():
+                        # Add file checkbox with indentation
                         file_path_str = str(item)
-                        checkbox = ft.Checkbox(label=f"📄 {item.name}", value=False, data=file_path_str)
-                        file_checkboxes[checkbox] = file_path_str
-                        controls.append(checkbox)
+                        checkbox = ft.Checkbox(label=f"{prefix}📄 {item.name}", value=False, data=file_path_str)
+                        file_checkboxes[checkbox] = file_path_str # Track checkbox
+                        items_to_add.append(checkbox)
                         logging.debug(f"Adding file checkbox: {item.name}")
 
             except PermissionError:
                 logging.warning(f"Permission denied accessing {current_path}")
-                controls.append(ft.Text(f"🚫 {current_path.name} (Permission Denied)", color=ft.colors.ON_SURFACE_VARIANT, italic=True))
+                items_to_add.append(ft.Text(f"{prefix}🚫 {current_path.name} (Permission Denied)", color=ft.colors.ON_SURFACE_VARIANT, italic=True))
             except Exception as walk_err:
                 logging.warning(f"Error walking directory {current_path}: {walk_err}")
-                controls.append(ft.Text(f"⚠️ {current_path.name} (Error)", color=ft.colors.ORANGE_ACCENT, italic=True))
-            return controls
+                items_to_add.append(ft.Text(f"{prefix}⚠️ {current_path.name} (Error)", color=ft.colors.ORANGE_ACCENT, italic=True))
 
-        # --- Assemble Top Level ---
-        top_level_items = walk_directory(root_path)
+        # Start the recursive walk
+        walk_directory_simple(root_path, 0)
 
-        if not top_level_items:
-            file_explorer_controls.controls.append(ft.Text("No displayable files/dirs.", italic=True, opacity=0.7))
-        else:
-            top_level_files = []
-            top_level_panels = []
-            for item in top_level_items:
-                if isinstance(item, ft.Checkbox) or isinstance(item, ft.Text): # Include error texts here too
-                    top_level_files.append(item)
-                elif isinstance(item, ft.ExpansionPanel):
-                    top_level_panels.append(item)
+        if not items_to_add:
+            items_to_add.append(ft.Text("No displayable files/dirs.", italic=True, opacity=0.7))
 
-            # Add top-level files/texts first
-            file_explorer_controls.controls.extend(top_level_files)
-
-            # If there are top-level directories, wrap ONLY them in an ExpansionPanelList
-            if top_level_panels:
-                # Add a separator if files were also present
-                if top_level_files:
-                     file_explorer_controls.controls.append(ft.Divider(height=5, color=ft.colors.TRANSPARENT))
-
-                expansion_list = ft.ExpansionPanelList(
-                    controls=top_level_panels,
-                    expand_icon_color=ft.colors.with_opacity(0.6, ft.Colors.ON_SURFACE),
-                    elevation=1,
-                    divider_color=ft.Colors.OUTLINE_VARIANT, # Divider between top-level directories
-                )
-                file_explorer_controls.controls.append(expansion_list)
+        # Add all collected controls to the Column
+        file_explorer_controls.controls.extend(items_to_add)
 
         status_bar.value = f"Files loaded from {root_path}."
         logging.info(status_bar.value)
@@ -158,9 +133,9 @@ def populate_file_explorer(root_dir_path: str):
         try:
             file_explorer_controls.update()
             status_bar.update()
-            logging.debug("File explorer ListView and status bar updated.")
+            logging.debug("File explorer Column and status bar updated.")
         except Exception as update_err:
-            logging.error(f"Error updating file explorer ListView UI: {update_err}")
+            logging.error(f"Error updating file explorer Column UI: {update_err}")
 
 def scroll_to_bottom():
     """Scrolls the chat history display to the bottom."""
