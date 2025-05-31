@@ -26,8 +26,13 @@ from ui_components import (
 )
 # Import the new client function
 from vertex_ai_client import generate_gemini_response
+# Import conversation manager
+from conversation_manager import ConversationManager
 
 config = config_manager.get_config()
+
+# --- Conversation Manager Initialization ---
+conversation_manager = ConversationManager()
 
 # --- Vertex AI Initialization ---
 vertex_ai_initialized = False
@@ -64,13 +69,60 @@ def main(page: ft.Page):
         else:
              logging.warning("Page overlay not ready for init error snackbar.")
 
+    # --- Load previous conversation on startup ---
+    def load_previous_conversation():
+        """アプリ起動時に前回の会話を復元"""
+        try:
+            loaded_history = conversation_manager.load_conversation()
+            if loaded_history:
+                # グローバルな会話履歴を更新
+                ui_components.conversation_history.clear()
+                ui_components.conversation_history.extend(loaded_history)
+                
+                # UIに会話履歴を表示
+                for content in loaded_history:
+                    if content.role == "user":
+                        user_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
+                        chat_history_display.controls.append(
+                            ft.Text(f"You: {user_text}", selectable=True)
+                        )
+                    elif content.role == "model":
+                        model_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
+                        response_md = ft.Markdown(f"**Gemini:**\n{model_text}", selectable=True, code_theme="atom-one-dark", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB)
+                        chat_history_display.controls.append(response_md)
+                
+                status_bar.value = f"前回の会話を復元しました ({len(loaded_history)} メッセージ)"
+                logging.info(f"前回の会話を復元: {len(loaded_history)} メッセージ")
+                scroll_to_bottom()
+            else:
+                status_bar.value = "新しい会話を開始します"
+        except Exception as e:
+            logging.error(f"会話復元エラー: {e}")
+            status_bar.value = "会話復元に失敗しました"
+
+    def save_current_conversation():
+        """現在の会話を保存"""
+        try:
+            if ui_components.conversation_history:
+                success = conversation_manager.save_conversation(ui_components.conversation_history)
+                if success:
+                    logging.debug("会話履歴を自動保存しました")
+                else:
+                    logging.warning("会話履歴の自動保存に失敗")
+        except Exception as e:
+            logging.error(f"自動保存エラー: {e}")
 
     def update_temp_label(e): temperature_label.value = f"{e.control.value:.2f}"; page.update()
     temperature_slider.on_change = update_temp_label
 
     def reset_conversation(e):
         global files_sent_in_convo
-        logging.info("Resetting conversation."); conversation_history.clear(); files_sent_in_convo = False
+        logging.info("Resetting conversation."); 
+        
+        # 現在の会話を保存してからリセット
+        save_current_conversation()
+        
+        conversation_history.clear(); files_sent_in_convo = False
         chat_history_display.controls.clear()
         # Reset checkboxes stored in the dictionary (Reverted logic)
         # Use the imported file_checkboxes directly
@@ -322,6 +374,10 @@ def main(page: ft.Page):
             scroll_to_bottom()
         finally:
             send_button.disabled = False; reset_button.disabled = False
+            
+            # メッセージ送信後に自動保存
+            save_current_conversation()
+            
             try: page.update()
             except Exception as final_update_err: logging.error(f"Error during final page update: {final_update_err}")
 
@@ -389,6 +445,10 @@ def main(page: ft.Page):
         try: populate_file_explorer(root_dir)
         except Exception as populate_err: status_bar.value = f"Error populating files: {populate_err}"; logging.error("Populate error", exc_info=True)
     else: status_bar.value = "Set 'root_directory' in config.json"; logging.warning(status_bar.value)
+    
+    # 前回の会話を復元
+    load_previous_conversation()
+    
     page.update()
 
 if __name__ == "__main__":
