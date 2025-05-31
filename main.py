@@ -22,7 +22,11 @@ from ui_components import (
     conversation_history,
     files_sent_in_convo,
     thinking_enabled_switch, thinking_budget_slider, thinking_budget_label,
-    system_prompt_template_dropdown
+    system_prompt_template_dropdown,
+    # Session management components
+    session_dropdown, new_session_name_field, create_session_button,
+    delete_session_button, session_info_text, update_session_dropdown_options,
+    update_session_info
 )
 # Import the new client function
 from vertex_ai_client import generate_gemini_response
@@ -141,7 +145,13 @@ def main(page: ft.Page):
              if checkbox_update_errors > 0: logging.warning(f"{checkbox_update_errors} checkboxes failed to update individually on reset.")
 
         system_prompt_field.value = config.get("default_system_prompt", "")
-        status_bar.value = "Conversation reset."; page.update()
+        status_bar.value = "Conversation reset."
+        
+        # セッション情報を更新
+        current_session = conversation_manager.current_session
+        update_session_info(current_session, 0)
+        
+        page.update()
     reset_button.on_click = reset_conversation
 
     # --- Copy Button Handler ---
@@ -306,7 +316,7 @@ def main(page: ft.Page):
                 thinking_panel_widget = None
                 if thinking_text:
                     thinking_panel_widget = ft.ExpansionPanelList(
-                        expand_icon_color=ft.Colors.with_opacity(0.6, ft.Colors.ON_SURFACE), elevation=1, divider_color=ft.Colors.OUTLINE_VARIANT,
+                        expand_icon_color=ft.Colors.ON_SURFACE_VARIANT, elevation=1, divider_color=ft.Colors.OUTLINE_VARIANT,
                         controls=[ft.ExpansionPanel(
                                 header=ft.ListTile(title=ft.Text("🤔 Thinking Process", italic=True, weight=ft.FontWeight.W_600)),
                                 content=ft.Container(ft.Text(thinking_text, selectable=True, italic=True), padding=ft.padding.only(left=15, right=15, bottom=10)))])
@@ -378,6 +388,14 @@ def main(page: ft.Page):
             # メッセージ送信後に自動保存
             save_current_conversation()
             
+            # セッション情報を更新
+            try:
+                current_session = conversation_manager.current_session
+                message_count = len(ui_components.conversation_history)
+                update_session_info(current_session, message_count)
+            except Exception as session_update_err:
+                logging.warning(f"セッション情報更新エラー: {session_update_err}")
+            
             try: page.update()
             except Exception as final_update_err: logging.error(f"Error during final page update: {final_update_err}")
 
@@ -426,7 +444,236 @@ def main(page: ft.Page):
 
     refresh_button = ft.IconButton(ft.Icons.REFRESH_ROUNDED, tooltip="Refresh File List", on_click=refresh_file_explorer)
 
+    # --- Session Management Functions ---
+    def refresh_session_list():
+        """セッション一覧を更新"""
+        try:
+            session_list = conversation_manager.get_session_list()
+            if not session_list:
+                session_list = ["default"]
+            
+            current_session = conversation_manager.current_session
+            update_session_dropdown_options(session_list, current_session)
+            
+            # セッション情報を更新
+            session_info = conversation_manager.get_session_info(current_session)
+            message_count = session_info.get("total_messages", 0) if session_info else 0
+            update_session_info(current_session, message_count)
+            
+            # UI更新を強制的に実行
+            try:
+                session_dropdown.update()
+                session_info_text.update()
+                page.update()
+            except Exception as ui_update_err:
+                logging.warning(f"セッションUI更新エラー: {ui_update_err}")
+            
+            logging.info(f"セッション一覧を更新: {session_list}, 現在のセッション: {current_session}")
+        except Exception as e:
+            logging.error(f"セッション一覧更新エラー: {e}")
+
+    def switch_session(e):
+        """セッションを切り替え"""
+        try:
+            new_session = session_dropdown.value
+            if new_session == conversation_manager.current_session:
+                return
+            
+            # 現在の会話を保存
+            save_current_conversation()
+            
+            # セッションを切り替え
+            conversation_manager.set_current_session(new_session)
+            
+            # 会話履歴をクリアしてから新しいセッションを読み込み
+            ui_components.conversation_history.clear()
+            chat_history_display.controls.clear()
+            
+            # 新しいセッションの会話を読み込み
+            loaded_history = conversation_manager.load_conversation(new_session)
+            if loaded_history:
+                ui_components.conversation_history.extend(loaded_history)
+                
+                # UIに表示
+                for content in loaded_history:
+                    if content.role == "user":
+                        user_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
+                        chat_history_display.controls.append(
+                            ft.Text(f"You: {user_text}", selectable=True)
+                        )
+                    elif content.role == "model":
+                        model_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
+                        response_md = ft.Markdown(f"**Gemini:**\n{model_text}", selectable=True, code_theme="atom-one-dark", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB)
+                        chat_history_display.controls.append(response_md)
+            
+            # セッション情報を更新
+            session_info = conversation_manager.get_session_info(new_session)
+            message_count = session_info.get("total_messages", 0) if session_info else 0
+            update_session_info(new_session, message_count)
+            
+            status_bar.value = f"セッション '{new_session}' に切り替えました ({message_count} メッセージ)"
+            scroll_to_bottom()
+            page.update()
+            
+        except Exception as e:
+            logging.error(f"セッション切り替えエラー: {e}")
+            status_bar.value = f"セッション切り替えに失敗: {e}"
+            page.update()
+
+    def create_new_session(e):
+        """新しいセッションを作成"""
+        try:
+            new_name = new_session_name_field.value.strip()
+            if not new_name:
+                snackbar = ft.SnackBar(ft.Text("セッション名を入力してください"), open=True)
+                page.overlay.append(snackbar)
+                page.update()
+                return
+            
+            # セッション名の重複チェック
+            existing_sessions = conversation_manager.get_session_list()
+            if new_name in existing_sessions:
+                snackbar = ft.SnackBar(ft.Text("そのセッション名は既に存在します"), open=True)
+                page.overlay.append(snackbar)
+                page.update()
+                return
+            
+            # 現在の会話を保存
+            save_current_conversation()
+            
+            # 新しいセッションに切り替え
+            conversation_manager.set_current_session(new_name)
+            
+            # 会話履歴をクリア
+            ui_components.conversation_history.clear()
+            chat_history_display.controls.clear()
+            
+            # 空のセッションファイルを作成
+            conversation_manager.save_conversation([])
+            
+            # セッション一覧を更新
+            refresh_session_list()
+            
+            # 入力フィールドをクリア
+            new_session_name_field.value = ""
+            if hasattr(new_session_name_field, 'page') and new_session_name_field.page:
+                new_session_name_field.update()
+            
+            status_bar.value = f"新しいセッション '{new_name}' を作成しました"
+            update_session_info(new_name, 0)
+            
+            # UI更新を強制実行
+            page.update()
+            
+        except Exception as e:
+            logging.error(f"セッション作成エラー: {e}")
+            status_bar.value = f"セッション作成に失敗: {e}"
+            page.update()
+
+    def delete_current_session(e):
+        """現在のセッションを削除"""
+        try:
+            current_session = conversation_manager.current_session
+            
+            # defaultセッションの削除を防ぐ
+            if current_session == "default":
+                snackbar = ft.SnackBar(ft.Text("defaultセッションは削除できません"), open=True)
+                page.overlay.append(snackbar)
+                page.update()
+                return
+            
+            # 確認ダイアログを表示
+            def confirm_delete(e):
+                dialog.open = False
+                page.update()
+                
+                try:
+                    # セッションを削除
+                    success = conversation_manager.delete_session(current_session)
+                    if success:
+                        # defaultセッションに切り替え
+                        conversation_manager.set_current_session("default")
+                        
+                        # 会話履歴をクリア
+                        ui_components.conversation_history.clear()
+                        chat_history_display.controls.clear()
+                        
+                        # defaultセッションを読み込み
+                        loaded_history = conversation_manager.load_conversation("default")
+                        if loaded_history:
+                            ui_components.conversation_history.extend(loaded_history)
+                            
+                            for content in loaded_history:
+                                if content.role == "user":
+                                    user_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
+                                    chat_history_display.controls.append(
+                                        ft.Text(f"You: {user_text}", selectable=True)
+                                    )
+                                elif content.role == "model":
+                                    model_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
+                                    response_md = ft.Markdown(f"**Gemini:**\n{model_text}", selectable=True, code_theme="atom-one-dark", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB)
+                                    chat_history_display.controls.append(response_md)
+                        
+                        # UI更新
+                        refresh_session_list()
+                        status_bar.value = f"セッション '{current_session}' を削除しました"
+                        scroll_to_bottom()
+                    else:
+                        status_bar.value = "セッション削除に失敗しました"
+                        page.update()
+                        
+                except Exception as delete_err:
+                    logging.error(f"セッション削除エラー: {delete_err}")
+                    status_bar.value = f"セッション削除エラー: {delete_err}"
+                    page.update()
+            
+            def cancel_delete(e):
+                dialog.open = False
+                page.update()
+            
+            dialog = ft.AlertDialog(
+                modal=True,
+                title=ft.Text("セッション削除の確認"),
+                content=ft.Text(f"セッション '{current_session}' を削除しますか？\nこの操作は取り消せません。"),
+                actions=[
+                    ft.TextButton("キャンセル", on_click=cancel_delete),
+                    ft.TextButton("削除", on_click=confirm_delete, style=ft.ButtonStyle(color=ft.Colors.ERROR)),
+                ],
+                actions_alignment=ft.MainAxisAlignment.END,
+            )
+            
+            page.overlay.append(dialog)
+            dialog.open = True
+            page.update()
+            
+        except Exception as e:
+            logging.error(f"セッション削除準備エラー: {e}")
+            status_bar.value = f"セッション削除準備エラー: {e}"
+            page.update()
+
+    # セッション管理のイベントハンドラーを設定
+    session_dropdown.on_change = switch_session
+    create_session_button.on_click = create_new_session
+    delete_session_button.on_click = delete_current_session
+    new_session_name_field.on_submit = create_new_session
+
     left_panel = ft.Container(content=ft.Column([
+        # Session Management Section
+        ft.Row([
+            ft.Text("Sessions", style=ft.TextThemeStyle.TITLE_MEDIUM, expand=True),
+        ]),
+        ft.Row([
+            session_dropdown,
+            create_session_button,
+            delete_session_button
+        ], spacing=5),
+        ft.Row([
+            new_session_name_field
+        ], spacing=5),
+        session_info_text,
+        ft.Divider(),
+        
+        # File Explorer Section
         ft.Row([
             ft.Text("Project Files", style=ft.TextThemeStyle.TITLE_MEDIUM, expand=True),
             refresh_button
@@ -445,6 +692,9 @@ def main(page: ft.Page):
         try: populate_file_explorer(root_dir)
         except Exception as populate_err: status_bar.value = f"Error populating files: {populate_err}"; logging.error("Populate error", exc_info=True)
     else: status_bar.value = "Set 'root_directory' in config.json"; logging.warning(status_bar.value)
+    
+    # セッション管理を初期化
+    refresh_session_list()
     
     # 前回の会話を復元
     load_previous_conversation()

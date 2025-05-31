@@ -1,0 +1,48 @@
+{
+  "session_name": "default",
+  "created_at": "2025-06-01T04:46:16.978081",
+  "updated_at": "2025-06-01T04:46:16.978081",
+  "total_messages": 4,
+  "conversation": [
+    {
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "こんにちは"
+        }
+      ],
+      "timestamp": "2025-06-01T04:46:16.979081"
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "type": "text",
+          "text": "こんにちは！\n\n何かお手伝いできることはありますか？"
+        }
+      ],
+      "timestamp": "2025-06-01T04:46:16.979081"
+    },
+    {
+      "role": "user",
+      "parts": [
+        {
+          "type": "text",
+          "text": "こんんちいは"
+        }
+      ],
+      "timestamp": "2025-06-01T04:46:16.979081"
+    },
+    {
+      "role": "model",
+      "parts": [
+        {
+          "type": "text",
+          "text": "こんにちは！\n\n何かお手伝いできることはありますか？"
+        }
+      ],
+      "timestamp": "2025-06-01T04:46:16.979081"
+    }
+  ]
+}

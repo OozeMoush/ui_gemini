@@ -57,6 +57,58 @@ status_bar = ft.Text("")
 conversation_history: list[Content] = []
 files_sent_in_convo = False
 
+# --- Session Management Components ---
+session_dropdown = ft.Dropdown(
+    label="Session",
+    options=[ft.dropdown.Option("default")],
+    value="default",
+    tooltip="Select conversation session",
+    width=150
+)
+
+new_session_name_field = ft.TextField(
+    label="新しいセッション名",
+    hint_text="Session name...",
+    width=150,
+    height=40
+)
+
+create_session_button = ft.IconButton(
+    icon=ft.Icons.ADD_ROUNDED,
+    tooltip="新しいセッションを作成",
+    width=40,
+    height=40
+)
+
+delete_session_button = ft.IconButton(
+    icon=ft.Icons.DELETE_ROUNDED,
+    tooltip="現在のセッションを削除",
+    width=40,
+    height=40,
+    icon_color=ft.Colors.ERROR
+)
+
+session_info_text = ft.Text(
+    "Session: default",
+    size=12,
+    color=ft.Colors.ON_SURFACE_VARIANT,
+    italic=True
+)
+
+# --- Session Management Helper Functions ---
+def update_session_dropdown_options(session_list: list[str], current_session: str = "default"):
+    """セッション一覧を更新"""
+    logging.info(f"Updating dropdown options: {session_list}, current: {current_session}")
+    session_dropdown.options = [ft.dropdown.Option(session) for session in session_list]
+    session_dropdown.value = current_session if current_session in session_list else (session_list[0] if session_list else "default")
+    logging.info(f"Dropdown value set to: {session_dropdown.value}")
+
+def update_session_info(session_name: str, message_count: int = 0):
+    """セッション情報を更新"""
+    session_info_text.value = f"Session: {session_name} ({message_count} messages)"
+    if hasattr(session_info_text, 'page') and session_info_text.page:
+        session_info_text.update()
+
 # --- Helper Functions ---
 def extract_thinking(text: str) -> tuple[str, str]:
     thinking_parts = []
