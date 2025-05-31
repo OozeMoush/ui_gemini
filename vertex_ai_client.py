@@ -1,6 +1,9 @@
 import logging
 import time
-from vertexai.generative_models import GenerativeModel, Part, FinishReason, GenerationConfig, Content
+import os
+from google import genai
+from google.genai.types import GenerateContentConfig, ThinkingConfig, HttpOptions
+from vertexai.generative_models import Content, Part
 # Import safety settings and initialization status from main module (or state manager later)
 # For now, assume safety_settings are defined/imported where this function is called
 # and vertex_ai_initialized is checked before calling.
@@ -11,6 +14,13 @@ INPUT_PRICE_TIER2 = 2.5   # $/1M tokens for > 200K input
 OUTPUT_PRICE_TIER1 = 10.0 # $/1M tokens for <= 200K output (assumed)
 OUTPUT_PRICE_TIER2 = 15.0 # $/1M tokens for > 200K output (assumed)
 TOKEN_THRESHOLD = 200000  # Threshold for price change
+
+# 環境変数設定（必要に応じて）
+def setup_gen_ai_env():
+    """Set up environment variables for Google Gen AI SDK with Vertex AI"""
+    if not os.getenv('GOOGLE_GENAI_USE_VERTEXAI'):
+        os.environ['GOOGLE_GENAI_USE_VERTEXAI'] = 'True'
+    # プロジェクトIDと場所は既にVertex AIの初期化で設定されているはず
 
 def calculate_cost(input_tokens: int | None, output_tokens: int | None) -> tuple[float | None, float | None, float | None]:
     """
@@ -41,25 +51,28 @@ def calculate_cost(input_tokens: int | None, output_tokens: int | None) -> tuple
     return input_cost, output_cost, total_cost
 
 # --- API Client Function ---
-# This function will now handle the core API interaction including streaming
 def generate_gemini_response(
     model_name: str,
     system_instruction: Content | None,
     contents: list[Content],
-    generation_config: GenerationConfig,
-    safety_settings: dict, # Pass safety settings explicitly
-    stream_update_callback # Function to call with text chunks
+    generation_config: dict,  # 簡素化
+    safety_settings: dict,
+    stream_update_callback,
+    thinking_enabled: bool = True,
+    thinking_budget: int = 8192
     ):
     """
-    Sends request to Vertex AI Gemini model and streams the response.
+    Sends request to Vertex AI Gemini model using Google Gen AI SDK and streams the response.
 
     Args:
         model_name: The name of the Gemini model to use.
         system_instruction: Optional system instruction content.
         contents: The conversation history and current user prompt.
         generation_config: Configuration for generation (temp, tokens, etc.).
-        safety_settings: Safety settings dictionary.
+        safety_settings: Safety settings dictionary (for compatibility, but Gen AI SDK handles this differently).
         stream_update_callback: A function to call with each received text chunk.
+        thinking_enabled: Whether to enable thinking mode.
+        thinking_budget: Token budget for thinking (0 to disable, max 24576 for Flash).
 
     Returns:
         A tuple containing:
@@ -71,29 +84,29 @@ def generate_gemini_response(
         - Estimated input cost (float or None).
         - Estimated output cost (float or None).
         - Estimated total cost (float or None).
+        - Thinking text (str or None).
     """
     full_response_text = ""
     final_model_content = None
     error_message = None
-    usage_metadata = None
     input_token_count = None
     output_token_count = None
-    input_cost = None  # Initialize costs
+    input_cost = None
     output_cost = None
     total_cost = None
+    thinking_text = None
     last_update_time = time.time()
-    update_interval = 0.05 # Throttle UI updates
+    update_interval = 0.05
 
     try:
-        gemini_model = GenerativeModel(
-            model_name,
-            safety_settings=safety_settings,
-            system_instruction=system_instruction
-        )
+        # 環境変数設定
+        setup_gen_ai_env()
+        
+        # Gen AI クライアント初期化
+        client = genai.Client(http_options=HttpOptions(api_version="v1"))
         logging.info(f"Sending request to model: {model_name}")
 
         # --- Log Input Content ---
-        # INFO level: Log a summary
         try:
             input_summary_log = f"Input Summary (model: {model_name}): "
             if system_instruction:
@@ -105,135 +118,142 @@ def generate_gemini_response(
         except Exception as log_summary_err:
             logging.warning(f"Could not format input summary for logging: {log_summary_err}")
 
-        # DEBUG level: Log the full input details
-        if logging.getLogger().isEnabledFor(logging.DEBUG):
+        # Gen AI SDK用のコンテンツ変換
+        gen_ai_contents = []
+        for content in contents:
+            if content.role == "system":
+                continue  # system instructionは別途処理
+            
+            # partsからテキストを抽出
+            text_parts = []
+            for part in content.parts:
+                if hasattr(part, 'text'):
+                    text_parts.append(part.text)
+            
+            combined_text = "\n".join(text_parts)
+            gen_ai_contents.append({
+                "role": content.role,
+                "parts": [{"text": combined_text}]
+            })
+
+        # System instructionを含める場合
+        prompt_with_system = ""
+        if system_instruction and system_instruction.parts:
+            prompt_with_system = f"[SYSTEM INSTRUCTION]: {system_instruction.parts[0].text}\n\n"
+        
+        # 最新のユーザープロンプトに追加
+        if gen_ai_contents and gen_ai_contents[-1]["role"] == "user":
+            gen_ai_contents[-1]["parts"][0]["text"] = prompt_with_system + gen_ai_contents[-1]["parts"][0]["text"]
+
+        # Generate content configの設定
+        config_kwargs = {}
+        
+        # Thinking設定
+        if thinking_enabled and thinking_budget > 0:
+            config_kwargs["thinking_config"] = ThinkingConfig(include_thoughts=True)
+            if "flash" in model_name.lower() and thinking_budget != 8192:
+                # Flashモデルの場合はthinking_budgetを設定可能
+                # Note: 実際のAPIでは別の方法かもしれません
+                logging.info(f"Setting thinking budget for Flash model: {thinking_budget}")
+        
+        # Generation config
+        if generation_config:
+            config_kwargs.update(generation_config)
+
+        generation_config_obj = GenerateContentConfig(**config_kwargs) if config_kwargs else None
+
+        logging.info(f"Thinking enabled: {thinking_enabled}, Budget: {thinking_budget}")
+
+        # ストリーミング生成
+        if generation_config_obj:
+            response_stream = client.models.generate_content_stream(
+                model=model_name,
+                contents=gen_ai_contents,
+                config=generation_config_obj
+            )
+        else:
+            response_stream = client.models.generate_content_stream(
+                model=model_name,
+                contents=gen_ai_contents
+            )
+
+        # ストリーミング処理
+        for chunk in response_stream:
             try:
-                full_input_log = f"--- Full Input to {model_name} ---"
-                if system_instruction:
-                    full_input_log += f"\n[SYSTEM]\n{system_instruction.parts[0].text}"
-                full_input_log += "\n[HISTORY & PROMPT]"
-                for i, content_item in enumerate(contents):
-                    full_input_log += f"\n[{i}] Role: {content_item.role}"
-                    for part in content_item.parts:
-                         # Assuming text part for now, adjust if handling multimodal
-                         full_input_log += f"\n{part.text}" # Log full text of each part
-                full_input_log += "\n--- End of Full Input ---"
-                logging.debug(full_input_log)
-            except Exception as log_full_err:
-                logging.warning(f"Could not format full input contents for DEBUG logging: {log_full_err}")
-
-        # --- Count Input Tokens ---
-        try:
-            # Use the same model instance to count tokens
-            count_response = gemini_model.count_tokens(contents=contents)
-            input_token_count = count_response.total_tokens
-            logging.info(f"Input Token Count (calculated): {input_token_count}")
-        except Exception as count_err:
-            logging.warning(f"Could not count input tokens: {count_err}")
-            input_token_count = None # Indicate failure
-
-        stream_response = gemini_model.generate_content(
-            contents=contents,
-            generation_config=generation_config,
-            stream=True,
-            tools=None,
-        )
-
-        for chunk in stream_response:
-            try:
-                # Check if chunk has text content before proceeding
-                if hasattr(chunk, 'text'):
+                if hasattr(chunk, 'text') and chunk.text:
                     chunk_text = chunk.text
-                    # logging.debug(f"Stream chunk received: '{chunk_text}'") # Removed for less noise
                     full_response_text += chunk_text
-                    # Call the callback to update UI
+                    # UI更新
                     stream_update_callback(full_response_text)
-                # else: # Log if chunk structure is unexpected but maybe not critical
-                #     logging.debug(f"Received stream chunk without 'text' attribute: {chunk}")
 
-                # Callback should handle throttling/page update
-                # current_time = time.time()
-                # if current_time - last_update_time >= update_interval:
-                #     last_update_time = current_time
-
-                # Callback should handle throttling/page update
-                # current_time = time.time()
-                # if current_time - last_update_time >= update_interval:
-                #     last_update_time = current_time
-
-            except AttributeError:
-                logging.warning(f"Chunk structure issue (no text): {chunk}")
             except Exception as chunk_proc_err:
-                 logging.error(f"Error processing stream chunk: {chunk_proc_err}", exc_info=True)
+                logging.error(f"Error processing stream chunk: {chunk_proc_err}", exc_info=True)
 
-        # After loop, try to get usage metadata from the stream response object
+        # Thinking情報を取得（非ストリーミングレスポンスから）
+        if thinking_enabled and thinking_budget > 0:
+            try:
+                # 同じリクエストを非ストリーミングで再実行してthinking情報を取得
+                full_response = client.models.generate_content(
+                    model=model_name,
+                    contents=gen_ai_contents,
+                    config=generation_config_obj
+                )
+                
+                # Thinking情報を抽出
+                if hasattr(full_response, 'candidates') and full_response.candidates:
+                    for candidate in full_response.candidates:
+                        if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                            for part in candidate.content.parts:
+                                if hasattr(part, 'thought') and part.thought:
+                                    thinking_text = part.text
+                                    logging.info("Thinking text extracted from response")
+                                    break
+                            if thinking_text:
+                                break
+                
+            except Exception as thinking_err:
+                logging.warning(f"Could not extract thinking information: {thinking_err}")
+
+        logging.debug(f"Stream finished. Full response length: {len(full_response_text)}")
+
+        # 最終コンテンツオブジェクト構築
         try:
-            # Accessing usage_metadata after the stream is consumed
-            if hasattr(stream_response, 'usage_metadata'):
-                 usage_metadata = stream_response.usage_metadata
-                 logging.info(f"Usage Metadata: {usage_metadata}")
-            else:
-                 # Sometimes it might be in the last chunk, less common with streaming
-                 # last_chunk = stream_response._chunks[-1] # This is hypothetical, API might differ
-                 # if hasattr(last_chunk, 'usage_metadata'):
-                 #    usage_metadata = last_chunk.usage_metadata
-                 #    logging.info(f"Usage Metadata from last chunk: {usage_metadata}")
-                 # else:
-                 logging.warning("Could not find usage_metadata in stream response.")
-        except Exception as usage_err:
-             logging.warning(f"Error retrieving usage metadata: {usage_err}")
-
-        # Try to get output token count from metadata if found
-        if usage_metadata:
-             try:
-                 output_token_count = getattr(usage_metadata, 'candidates_token_count', None) # Use getattr for safety
-                 if output_token_count is not None:
-                     logging.info(f"Output Token Count (from metadata): {output_token_count}")
-                 else:
-                     logging.warning("usage_metadata found but 'candidates_token_count' attribute missing or None.")
-             except Exception as meta_parse_err:
-                  logging.warning(f"Error parsing candidates_token_count from usage_metadata: {meta_parse_err}")
-
-
-        logging.debug(f"Stream finished. Full raw length: {len(full_response_text)}")
-
-        # Construct final content object from accumulated text
-        try:
-             final_model_content = Content(parts=[Part.from_text(full_response_text)], role="model")
+            final_model_content = Content(parts=[Part.from_text(full_response_text)], role="model")
         except Exception as final_content_err:
-             logging.error(f"Could not construct final model Content: {final_content_err}")
-             final_model_content = Content(parts=[Part.from_text("Error constructing final content.")]) # Fallback
-
+            logging.error(f"Could not construct final model Content: {final_content_err}")
+            final_model_content = Content(parts=[Part.from_text("Error constructing final content.")], role="model")
 
     except Exception as api_err:
         error_message = f"Error during API call/streaming: {api_err}"
         logging.error(error_message, exc_info=True)
 
-    # Log final output at INFO level
+    # ログ出力
     if error_message:
         logging.info(f"Output: API Error - {error_message}")
     elif full_response_text:
         logging.info(f"Output: Success - Response length: {len(full_response_text)}")
-        logging.debug(f"Full Output Text (DEBUG): {full_response_text[:500]}{'...' if len(full_response_text) > 500 else ''}") # Log more details in DEBUG
+        # 応答テキストの詳細はDEBUGレベルでより少なく
+        if logging.getLogger().isEnabledFor(logging.DEBUG):
+            logging.debug(f"Response preview: {full_response_text[:100]}{'...' if len(full_response_text) > 100 else ''}")
     else:
         logging.info("Output: Empty response received.")
 
-    # --- Estimate Output Tokens if not provided by API ---
-    output_token_source = "metadata" # Track where the count came from
-    if output_token_count is None and full_response_text:
-        estimated_count = int(len(full_response_text) * 0.8)
-        output_token_count = estimated_count # Use the estimate
-        output_token_source = "estimated (x0.8 char)"
-        logging.info(f"Output Token Count ({output_token_source}): {output_token_count}")
+    # トークン数の推定（Gen AI SDKはまだ詳細なメタデータを提供しない場合があります）
+    if full_response_text:
+        estimated_input_tokens = sum(len(content["parts"][0]["text"]) for content in gen_ai_contents) // 4
+        estimated_output_tokens = len(full_response_text) // 4
+        input_token_count = estimated_input_tokens
+        output_token_count = estimated_output_tokens
+        logging.info(f"Token Count (estimated): Input={input_token_count}, Output={output_token_count}")
 
-    # Calculate costs after getting token counts (actual or estimated)
+    # コスト計算
     input_cost, output_cost, total_cost = calculate_cost(input_token_count, output_token_count)
 
     if total_cost is not None:
-        log_cost_detail = f"Input: ${input_cost:.6f} ({input_token_count} tokens), Output: ${output_cost:.6f} ({output_token_count} tokens - {output_token_source})"
+        log_cost_detail = f"Input: ${input_cost:.6f} ({input_token_count} tokens), Output: ${output_cost:.6f} ({output_token_count} tokens - estimated)"
         logging.info(f"Estimated Total Cost: ${total_cost:.6f} ({log_cost_detail})")
     else:
         logging.warning("Could not calculate estimated cost (input tokens unavailable).")
 
-    # Return calculated/estimated tokens and costs
-    return full_response_text, final_model_content, error_message, input_token_count, output_token_count, input_cost, output_cost, total_cost
+    # Return calculated/estimated tokens, costs, and thinking text
+    return full_response_text, final_model_content, error_message, input_token_count, output_token_count, input_cost, output_cost, total_cost, thinking_text

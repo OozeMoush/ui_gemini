@@ -15,11 +15,30 @@ if default_model not in available_models:
     logging.warning(f"Default model '{default_model}' not in available_models list. Using first available.")
     default_model = available_models[0] if available_models else "gemini-1.5-flash-001"
 
+# システムプロンプトテンプレート設定
+system_prompt_templates = config.get("system_prompt_templates", {"なし": ""})
+template_names = list(system_prompt_templates.keys())
+
 model_dropdown = ft.Dropdown(label="Model", options=[ft.dropdown.Option(m) for m in available_models], value=default_model, tooltip="Select model", expand=True)
 temperature_slider = ft.Slider(min=0.0, max=1.0, divisions=20, label="{value:.2f}", value=config.get("default_temperature", 0.7), tooltip="Temperature", expand=True)
 temperature_label = ft.Text(f"{temperature_slider.value:.2f}", width=40)
 max_tokens_field = ft.TextField(label="MaxTok", value=str(config.get("default_max_output_tokens", 8192)), keyboard_type=ft.KeyboardType.NUMBER, tooltip="Max Output Tokens", width=100)
-system_prompt_field = ft.TextField(label="System Prompt", value=config.get("default_system_prompt", ""), tooltip="Optional system instruction", multiline=True, min_lines=1, max_lines=3, expand=True)
+
+# システムプロンプトテンプレート選択ドロップダウン
+system_prompt_template_dropdown = ft.Dropdown(
+    label="テンプレート",
+    options=[ft.dropdown.Option(name) for name in template_names],
+    value=template_names[0],
+    tooltip="システムプロンプトテンプレートを選択",
+    width=150
+)
+
+system_prompt_field = ft.TextField(label="System Prompt", value=config.get("default_system_prompt", ""), tooltip="Optional system instruction", multiline=True, min_lines=1, max_lines=5, expand=True)
+
+# --- Thinking Controls ---
+thinking_enabled_switch = ft.Switch(label="Thinking", value=True, tooltip="Enable/Disable thinking mode")
+thinking_budget_slider = ft.Slider(min=0, max=24576, divisions=24, label="{value:.0f}", value=8192, tooltip="Thinking budget (tokens)", expand=True)
+thinking_budget_label = ft.Text("8192", width=60)
 
 # --- File Explorer Components (Reverting to simple Column) ---
 # Use dictionary to track checkboxes and their corresponding file paths
@@ -46,12 +65,40 @@ def extract_thinking(text: str) -> tuple[str, str]:
     main_content = pattern.sub(replace_thinking, text).strip()
     return "\n---\n".join(thinking_parts), main_content
 
+def update_thinking_budget_label(e):
+    """Update thinking budget label when slider changes"""
+    budget_value = int(e.control.value)
+    thinking_budget_label.value = str(budget_value)
+    if hasattr(e.control, 'page') and e.control.page:
+        thinking_budget_label.update()
+
+def update_thinking_controls(e):
+    """Update thinking controls when switch changes"""
+    is_enabled = thinking_enabled_switch.value
+    thinking_budget_slider.disabled = not is_enabled
+    thinking_budget_label.disabled = not is_enabled
+    if hasattr(e.control, 'page') and e.control.page:
+        thinking_budget_slider.update()
+        thinking_budget_label.update()
+
+def load_system_prompt_template(e):
+    """Load selected system prompt template into the text field"""
+    selected_template = system_prompt_template_dropdown.value
+    if selected_template and selected_template in system_prompt_templates:
+        system_prompt_field.value = system_prompt_templates[selected_template]
+        if hasattr(e.control, 'page') and e.control.page:
+            system_prompt_field.update()
+
+# Set up event handlers
+thinking_budget_slider.on_change = update_thinking_budget_label
+thinking_enabled_switch.on_change = update_thinking_controls
+system_prompt_template_dropdown.on_change = load_system_prompt_template
+
 # Populate function for simple Column view (Reverted)
 def populate_file_explorer(root_dir_path: str):
     global file_checkboxes
     file_checkboxes.clear()
     file_explorer_controls.controls.clear()
-    logging.info(f"Populating file explorer (Column - reverted) for: {root_dir_path}")
 
     try:
         root_path = pathlib.Path(root_dir_path).resolve()
@@ -73,7 +120,6 @@ def populate_file_explorer(root_dir_path: str):
             current_config = get_config()
             excluded_dirs_list = current_config.get("excluded_dirs", list(default_excludes))
             excluded_dirs = set(excluded_dirs_list)
-            logging.info(f"Using excluded dirs: {excluded_dirs}")
         except Exception as config_err:
             logging.warning(f"Could not load excluded_dirs from config, using defaults: {config_err}")
             excluded_dirs = default_excludes
@@ -101,7 +147,6 @@ def populate_file_explorer(root_dir_path: str):
                         checkbox = ft.Checkbox(label=f"{prefix}📄 {item.name}", value=False, data=file_path_str)
                         file_checkboxes[checkbox] = file_path_str # Track checkbox
                         items_to_add.append(checkbox)
-                        logging.debug(f"Adding file checkbox: {item.name}")
 
             except PermissionError:
                 logging.warning(f"Permission denied accessing {current_path}")
@@ -133,7 +178,6 @@ def populate_file_explorer(root_dir_path: str):
         try:
             file_explorer_controls.update()
             status_bar.update()
-            logging.debug("File explorer Column and status bar updated.")
         except Exception as update_err:
             logging.error(f"Error updating file explorer Column UI: {update_err}")
 
@@ -141,6 +185,5 @@ def scroll_to_bottom():
     """Scrolls the chat history display to the bottom."""
     try:
          chat_history_display.scroll_to(offset=-1, duration=300, curve=ft.AnimationCurve.EASE_OUT)
-         logging.debug("Scrolled chat history to bottom.")
     except Exception as scroll_err:
          logging.warning(f"Could not scroll chat: {scroll_err}")

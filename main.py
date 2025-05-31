@@ -8,7 +8,7 @@ import logging # Still needed for logging calls within this file
 import google.cloud.aiplatform as aiplatform
 from vertexai.generative_models import (
     # Keep only necessary imports here, others are used in vertex_ai_client
-    Part, FinishReason, GenerationConfig, Content
+    Part, Content
 )
 import vertexai.generative_models as generative_models # Re-add this import for safety_settings
 # Import necessary UI components, state variables, and helpers from ui_components
@@ -20,7 +20,9 @@ from ui_components import (
     chat_history_display, user_input, send_button, reset_button, status_bar,
     populate_file_explorer, scroll_to_bottom, extract_thinking,
     conversation_history,
-    files_sent_in_convo
+    files_sent_in_convo,
+    thinking_enabled_switch, thinking_budget_slider, thinking_budget_label,
+    system_prompt_template_dropdown
 )
 # Import the new client function
 from vertex_ai_client import generate_gemini_response
@@ -71,21 +73,19 @@ def main(page: ft.Page):
         logging.info("Resetting conversation."); conversation_history.clear(); files_sent_in_convo = False
         chat_history_display.controls.clear()
         # Reset checkboxes stored in the dictionary (Reverted logic)
-        logging.debug(f"Resetting {len(ui_components.file_checkboxes)} checkboxes in dictionary.")
-        checkbox_update_errors = 0
         # Use the imported file_checkboxes directly
         for checkbox in ui_components.file_checkboxes.keys():
-            checkbox.value = False;
+            checkbox.value = False
         try:
             # Update the Column containing checkboxes
             ui_components.file_explorer_controls.update()
-            logging.debug("File explorer Column updated after checkbox reset.")
         except Exception as control_update_err:
              # Fallback might be needed if column update fails
              logging.warning(f"Failed update on reset trying individuals: {control_update_err}")
+             checkbox_update_errors = 0
              for checkbox in ui_components.file_checkboxes.keys():
                  try: checkbox.update()
-                 except Exception as cb_err: checkbox_update_errors += 1; logging.debug(f"Individual checkbox update failed: {cb_err}")
+                 except Exception as cb_err: checkbox_update_errors += 1
              if checkbox_update_errors > 0: logging.warning(f"{checkbox_update_errors} checkboxes failed to update individually on reset.")
 
         system_prompt_field.value = config.get("default_system_prompt", "")
@@ -133,7 +133,6 @@ def main(page: ft.Page):
                                     selected_files_this_turn.append(file_path.name)
                                     with open(file_path, 'r', encoding='utf-8', errors='ignore') as f: file_content = f.read()
                                     current_prompt_parts.insert(0, Part.from_text(f"--- Content of {file_path.name} ---\n```\n{file_content}\n```\n"))
-                                    logging.debug(f"Read/added selected file: {file_path_str}")
                                 else:
                                     logging.warning(f"Selected path is not a file: {file_path_str}")
                             except Exception as read_err:
@@ -159,7 +158,6 @@ def main(page: ft.Page):
             if current_time - last_stream_update_time >= stream_update_interval:
                 try:
                     page.update(); last_stream_update_time = current_time
-                    logging.debug("Stream UI updated.")
                 except Exception as update_err: logging.warning(f"Stream update error: {update_err}")
 
         full_response_text = None
@@ -177,15 +175,24 @@ def main(page: ft.Page):
             except (ValueError, AssertionError): selected_max_tokens = config.get("default_max_output_tokens", 8192); max_tokens_field.value = str(selected_max_tokens); snackbar = ft.SnackBar(ft.Text("Invalid Max Tokens. Using default."), open=True); page.overlay.append(snackbar); page.update()
 
             system_instruction = Content(parts=[Part.from_text(system_prompt_text)], role="system") if system_prompt_text else None
-            generation_config = GenerationConfig(temperature=selected_temperature, max_output_tokens=selected_max_tokens)
+            # 新しいAPIに合わせて辞書形式で設定
+            generation_config = {
+                "temperature": selected_temperature,
+                "max_output_tokens": selected_max_tokens
+            }
             current_content = Content(parts=current_prompt_parts, role="user")
+
+            # Thinking設定を取得
+            thinking_enabled = thinking_enabled_switch.value
+            thinking_budget = int(thinking_budget_slider.value) if thinking_enabled else 0
 
             status_bar.value = f"Sending to {selected_model_name}..."; page.update()
 
-            full_response_text, final_model_content, api_error_message, input_tokens, output_tokens, input_cost, output_cost, total_cost = generate_gemini_response(
+            full_response_text, final_model_content, api_error_message, input_tokens, output_tokens, input_cost, output_cost, total_cost, thinking_text = generate_gemini_response(
                 model_name=selected_model_name, system_instruction=system_instruction,
                 contents=conversation_history + [current_content], generation_config=generation_config,
-                safety_settings=safety_settings, stream_update_callback=stream_callback
+                safety_settings=safety_settings, stream_update_callback=stream_callback,
+                thinking_enabled=thinking_enabled, thinking_budget=thinking_budget
             )
 
             input_info_text = ""
@@ -231,21 +238,28 @@ def main(page: ft.Page):
             elif full_response_text is not None and final_model_content is not None:
                 logging.debug(f"Stream finished. Full raw length: {len(full_response_text)}")
 
-                thinking_text, main_text = extract_thinking(full_response_text)
-                logging.info(f"Final extracted thinking: {'Yes' if thinking_text else 'None'}")
-                logging.info(f"Final extracted main text (first 200): {main_text[:200]}...")
+                # 古いextract_thinking関数の代わりに、APIから返されたthinking_textを使用
+                if thinking_text:
+                    main_text = full_response_text
+                    logging.info(f"Thinking text received from API: {'Yes' if thinking_text else 'None'}")
+                else:
+                    # fallbackとして従来の抽出方法も試す
+                    thinking_text, main_text = extract_thinking(full_response_text)
+                    logging.info(f"Extracted thinking using regex: {'Yes' if thinking_text else 'None'}")
+                
+                logging.info(f"Final main text (first 200): {main_text[:200]}...")
 
                 gemini_response_md.value = f"**Gemini:**\n{main_text}"
 
                 thinking_panel_widget = None
                 if thinking_text:
                     thinking_panel_widget = ft.ExpansionPanelList(
-                        expand_icon_color=ft.colors.with_opacity(0.6, ft.Colors.ON_SURFACE), elevation=1, divider_color=ft.Colors.OUTLINE_VARIANT,
+                        expand_icon_color=ft.Colors.with_opacity(0.6, ft.Colors.ON_SURFACE), elevation=1, divider_color=ft.Colors.OUTLINE_VARIANT,
                         controls=[ft.ExpansionPanel(
-                                header=ft.ListTile(title=ft.Text("<Thinking>", italic=True, weight=ft.FontWeight.W_600)),
+                                header=ft.ListTile(title=ft.Text("🤔 Thinking Process", italic=True, weight=ft.FontWeight.W_600)),
                                 content=ft.Container(ft.Text(thinking_text, selectable=True, italic=True), padding=ft.padding.only(left=15, right=15, bottom=10)))])
                     chat_history_display.controls.append(thinking_panel_widget)
-                    logging.info("Added thinking panel dynamically.")
+                    logging.info("Added thinking panel with API thinking text.")
 
                 output_info_display_widget = ft.Text(output_info_text, size=10, italic=True, color=ft.Colors.ON_SURFACE_VARIANT, selectable=True)
 
@@ -267,7 +281,6 @@ def main(page: ft.Page):
                 try:
                     conversation_history.append(current_content)
                     conversation_history.append(final_model_content)
-                    logging.debug(f"Appended to history. New length: {len(conversation_history)}")
                 except Exception as history_err:
                     logging.error(f"Error finalizing history: {history_err}")
 
@@ -309,13 +322,35 @@ def main(page: ft.Page):
             scroll_to_bottom()
         finally:
             send_button.disabled = False; reset_button.disabled = False
-            try: page.update(); logging.debug("Final page update in send_message.")
+            try: page.update()
             except Exception as final_update_err: logging.error(f"Error during final page update: {final_update_err}")
 
     send_button.on_click = send_message
     user_input.on_submit = send_message
 
-    parameter_bar = ft.Container(content=ft.Column([ft.Row([model_dropdown, ft.VerticalDivider(width=5), ft.Text("Temp:", width=45, tooltip="Temperature"), temperature_label, temperature_slider, ft.VerticalDivider(width=5), max_tokens_field], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=5, wrap=False), ft.Row([system_prompt_field], expand=True) ]), padding=ft.padding.symmetric(horizontal=10, vertical=5), border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)))
+    parameter_bar = ft.Container(content=ft.Column([
+        ft.Row([
+            model_dropdown, 
+            ft.VerticalDivider(width=5), 
+            ft.Text("Temp:", width=45, tooltip="Temperature"), 
+            temperature_label, 
+            temperature_slider, 
+            ft.VerticalDivider(width=5), 
+            max_tokens_field
+        ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=5, wrap=False), 
+        ft.Row([
+            thinking_enabled_switch,
+            ft.VerticalDivider(width=5),
+            ft.Text("Budget:", width=50, tooltip="Thinking Budget"),
+            thinking_budget_label,
+            thinking_budget_slider,
+        ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=5, wrap=False),
+        ft.Row([
+            system_prompt_template_dropdown,
+            ft.VerticalDivider(width=5),
+            system_prompt_field
+        ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=5, expand=True)
+    ]), padding=ft.padding.symmetric(horizontal=10, vertical=5), border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)))
 
     def refresh_file_explorer(e):
         root_dir = config.get("root_directory")
@@ -346,7 +381,7 @@ def main(page: ft.Page):
     width=300, padding=10, border=ft.border.all(1, ft.Colors.OUTLINE), border_radius=ft.border_radius.all(5))
     right_panel = ft.Container(content=ft.Column([chat_history_display, ft.Row([user_input, send_button, reset_button], alignment=ft.MainAxisAlignment.END), status_bar], expand=True), expand=True, padding=10)
     main_row = ft.Row([left_panel, right_panel], expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH)
-    try: page.add(parameter_bar, main_row); logging.info("Main layout added.")
+    try: page.add(parameter_bar, main_row)
     except Exception as layout_err: logging.error("Layout construction error", exc_info=True); page.add(ft.Text(f"Fatal Layout Error: {layout_err}", color=ft.Colors.RED))
 
     root_dir = config.get("root_directory");
