@@ -17,11 +17,11 @@ import ui_components
 from ui_components import (
     model_dropdown, temperature_slider, temperature_label, max_tokens_field,
     system_prompt_field, file_checkboxes, file_explorer_controls,
-    chat_history_display, user_input, send_button, reset_button, status_bar,
+    chat_history_display, user_input, send_button, cancel_button, reset_button, status_bar,
     populate_file_explorer, scroll_to_bottom, extract_thinking,
     conversation_history,
-    files_sent_in_convo,
-    thinking_enabled_switch, thinking_budget_slider, thinking_budget_label,
+    files_sent_in_convo, is_sending, cancel_requested,
+    thinking_budget_slider, thinking_budget_label, thinking_auto_budget_switch,
     system_prompt_template_dropdown,
     # Session management components
     session_dropdown, new_session_name_field, create_session_button,
@@ -29,7 +29,7 @@ from ui_components import (
     update_session_info
 )
 # Import the new client function
-from vertex_ai_client import generate_gemini_response
+from vertex_ai_client import generate_gemini_response, calculate_cost
 # Import conversation manager
 from conversation_manager import ConversationManager
 
@@ -55,6 +55,10 @@ try:
         logging.warning(init_error_message); print(f"Warning: {init_error_message}")
 except Exception as e:
     init_error_message = f"Error initializing Vertex AI: {e}"; logging.error(init_error_message, exc_info=True); print(f"Error: {init_error_message}")
+
+# --- Global variables ---
+refresh_button = None
+current_session_name = "default"
 
 # --- Main Application Logic ---
 def main(page: ft.Page):
@@ -162,8 +166,20 @@ def main(page: ft.Page):
         page.overlay.append(snackbar)
         page.update()
 
+    def cancel_send(e):
+        """送信をキャンセルする"""
+        ui_components.cancel_requested = True
+        status_bar.value = "キャンセル中..."
+        logging.info("ユーザーが送信をキャンセルしました")
+        page.update()
+
     def send_message(e):
         global files_sent_in_convo
+        
+        # キャンセルリクエストをリセット
+        ui_components.cancel_requested = False
+        ui_components.is_sending = False
+        
         prompt_text = user_input.value.strip()
         system_prompt_text = system_prompt_field.value.strip()
         if not prompt_text: snackbar = ft.SnackBar(ft.Text("Please enter a prompt."), open=True); page.overlay.append(snackbar); page.update(); return
@@ -178,7 +194,13 @@ def main(page: ft.Page):
         chat_history_display.controls.append(user_message_column); user_input.value = ""; user_input.focus()
         scroll_to_bottom(); page.update()
 
-        send_button.disabled = True; reset_button.disabled = True; status_bar.value = "Processing..."; page.update()
+        # 送信状態を設定してボタンを切り替え
+        ui_components.is_sending = True
+        send_button.visible = False
+        cancel_button.visible = True
+        reset_button.disabled = True
+        status_bar.value = "Processing..."
+        page.update()
 
         current_prompt_parts = [Part.from_text(prompt_text)]; files_appended_now = False
         if not files_sent_in_convo:
@@ -204,7 +226,18 @@ def main(page: ft.Page):
                                 scroll_to_bottom(); page.update()
 
                 if selected_files_this_turn: files_sent_in_convo = True; files_appended_now = True; logging.info(f"Prepending files: {', '.join(selected_files_this_turn)}")
-            except Exception as proc_err: logging.error("File processing error.", exc_info=True); chat_history_display.controls.append(ft.Text(f"Error processing selected files: {proc_err}", color=ft.Colors.RED)); send_button.disabled = False; reset_button.disabled = False; status_bar.value = "Error processing files."; scroll_to_bottom(); page.update(); return
+            except Exception as proc_err: 
+                logging.error("File processing error.", exc_info=True)
+                chat_history_display.controls.append(ft.Text(f"Error processing selected files: {proc_err}", color=ft.Colors.RED))
+                # エラー時のボタン状態リセット
+                ui_components.is_sending = False
+                send_button.visible = True
+                cancel_button.visible = False
+                reset_button.disabled = False
+                status_bar.value = "Error processing files."
+                scroll_to_bottom()
+                page.update()
+                return
 
         gemini_response_md = ft.Markdown(f"**Gemini:**\n▌", selectable=True, code_theme="atom-one-dark", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB, on_tap_link=lambda e: page.launch_url(e.data))
         gemini_response_container = ft.Container(content=gemini_response_md, padding=ft.padding.only(bottom=10), expand=True)
@@ -215,12 +248,17 @@ def main(page: ft.Page):
         last_stream_update_time = time.time(); stream_update_interval = 0.05
         def stream_callback(accumulated_text: str):
             nonlocal last_stream_update_time
+            # キャンセルがリクエストされた場合は更新をスキップ
+            if ui_components.cancel_requested:
+                return False  # キャンセル信号を返す
+            
             gemini_response_md.value = f"**Gemini:**\n{accumulated_text}▌"
             current_time = time.time()
             if current_time - last_stream_update_time >= stream_update_interval:
                 try:
                     page.update(); last_stream_update_time = current_time
                 except Exception as update_err: logging.warning(f"Stream update error: {update_err}")
+            return True  # 続行信号を返す
 
         full_response_text = None
         final_model_content = None
@@ -245,8 +283,8 @@ def main(page: ft.Page):
             current_content = Content(parts=current_prompt_parts, role="user")
 
             # Thinking設定を取得
-            thinking_enabled = thinking_enabled_switch.value
-            thinking_budget = int(thinking_budget_slider.value) if thinking_enabled else 0
+            thinking_budget = int(thinking_budget_slider.value)
+            logging.info(f"DEBUG: UI思考バジェット値: {thinking_budget}, 自動バジェット: {thinking_auto_budget_switch.value}")
 
             status_bar.value = f"Sending to {selected_model_name}..."; page.update()
 
@@ -254,7 +292,8 @@ def main(page: ft.Page):
                 model_name=selected_model_name, system_instruction=system_instruction,
                 contents=conversation_history + [current_content], generation_config=generation_config,
                 safety_settings=safety_settings, stream_update_callback=stream_callback,
-                thinking_enabled=thinking_enabled, thinking_budget=thinking_budget
+                thinking_budget=thinking_budget,
+                thinking_auto_budget=thinking_auto_budget_switch.value
             )
 
             input_info_text = ""
@@ -318,8 +357,8 @@ def main(page: ft.Page):
                     thinking_panel_widget = ft.ExpansionPanelList(
                         expand_icon_color=ft.Colors.ON_SURFACE_VARIANT, elevation=1, divider_color=ft.Colors.OUTLINE_VARIANT,
                         controls=[ft.ExpansionPanel(
-                                header=ft.ListTile(title=ft.Text("🤔 Thinking Process", italic=True, weight=ft.FontWeight.W_600)),
-                                content=ft.Container(ft.Text(thinking_text, selectable=True, italic=True), padding=ft.padding.only(left=15, right=15, bottom=10)))])
+                                header=ft.ListTile(title=ft.Text("🤔 Thinking Process", italic=True, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE)),
+                                content=ft.Container(ft.Text(thinking_text, selectable=True, italic=True, color=ft.Colors.ON_SURFACE), padding=ft.padding.only(left=15, right=15, bottom=10)))])
                     chat_history_display.controls.append(thinking_panel_widget)
                     logging.info("Added thinking panel with API thinking text.")
 
@@ -383,23 +422,41 @@ def main(page: ft.Page):
             status_bar.value = "Application Error occurred."
             scroll_to_bottom()
         finally:
-            send_button.disabled = False; reset_button.disabled = False
+            # キャンセル状態を確認（リセット前に）
+            was_cancelled = ui_components.cancel_requested
             
-            # メッセージ送信後に自動保存
-            save_current_conversation()
+            # 送信状態をリセットしてボタンを元に戻す
+            ui_components.is_sending = False
+            ui_components.cancel_requested = False
+            send_button.visible = True
+            cancel_button.visible = False
+            reset_button.disabled = False
             
-            # セッション情報を更新
-            try:
-                current_session = conversation_manager.current_session
-                message_count = len(ui_components.conversation_history)
-                update_session_info(current_session, message_count)
-            except Exception as session_update_err:
-                logging.warning(f"セッション情報更新エラー: {session_update_err}")
+            # キャンセルされた場合の処理
+            if was_cancelled:
+                status_bar.value = "送信がキャンセルされました"
+                # 未完了の応答があれば削除
+                if 'response_row' in locals() and response_row in chat_history_display.controls:
+                    chat_history_display.controls.remove(response_row)
+                scroll_to_bottom()
+                logging.info("送信処理がキャンセルされました")
+            elif not api_error_message:  # エラーがない場合のみ保存
+                # メッセージ送信後に自動保存
+                save_current_conversation()
+                
+                # セッション情報を更新
+                try:
+                    current_session = conversation_manager.current_session
+                    message_count = len(ui_components.conversation_history)
+                    update_session_info(current_session, message_count)
+                except Exception as session_update_err:
+                    logging.warning(f"セッション情報更新エラー: {session_update_err}")
             
             try: page.update()
             except Exception as final_update_err: logging.error(f"Error during final page update: {final_update_err}")
 
     send_button.on_click = send_message
+    cancel_button.on_click = cancel_send
     user_input.on_submit = send_message
 
     parameter_bar = ft.Container(content=ft.Column([
@@ -413,9 +470,9 @@ def main(page: ft.Page):
             max_tokens_field
         ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=5, wrap=False), 
         ft.Row([
-            thinking_enabled_switch,
+            thinking_auto_budget_switch,  # 自動バジェットスイッチ
             ft.VerticalDivider(width=5),
-            ft.Text("Budget:", width=50, tooltip="Thinking Budget"),
+            ft.Text("Budget:", width=50, tooltip="思考バジェット (0=無効)", color=ft.Colors.ON_SURFACE),
             thinking_budget_label,
             thinking_budget_slider,
         ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=5, wrap=False),
@@ -682,7 +739,13 @@ def main(page: ft.Page):
         file_explorer_controls # Reference the Column control again
     ], expand=True), # Removed scroll=... from Column as it's the default
     width=300, padding=10, border=ft.border.all(1, ft.Colors.OUTLINE), border_radius=ft.border_radius.all(5))
-    right_panel = ft.Container(content=ft.Column([chat_history_display, ft.Row([user_input, send_button, reset_button], alignment=ft.MainAxisAlignment.END), status_bar], expand=True), expand=True, padding=10)
+    
+    # 新しいタブベースのチャット表示を使用
+    right_panel = ft.Container(content=ft.Column([
+        chat_history_display,  # 従来のチャット表示に戻す
+        ft.Row([user_input, send_button, cancel_button, reset_button], alignment=ft.MainAxisAlignment.END), 
+        status_bar
+    ], expand=True), expand=True, padding=10)
     main_row = ft.Row([left_panel, right_panel], expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH)
     try: page.add(parameter_bar, main_row)
     except Exception as layout_err: logging.error("Layout construction error", exc_info=True); page.add(ft.Text(f"Fatal Layout Error: {layout_err}", color=ft.Colors.RED))

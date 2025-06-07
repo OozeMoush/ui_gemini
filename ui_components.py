@@ -36,9 +36,11 @@ system_prompt_template_dropdown = ft.Dropdown(
 system_prompt_field = ft.TextField(label="System Prompt", value=config.get("default_system_prompt", ""), tooltip="Optional system instruction", multiline=True, min_lines=1, max_lines=5, expand=True)
 
 # --- Thinking Controls ---
-thinking_enabled_switch = ft.Switch(label="Thinking", value=True, tooltip="Enable/Disable thinking mode")
-thinking_budget_slider = ft.Slider(min=0, max=24576, divisions=24, label="{value:.0f}", value=8192, tooltip="Thinking budget (tokens)", expand=True)
-thinking_budget_label = ft.Text("8192", width=60)
+thinking_budget_slider = ft.Slider(min=0, max=24576, divisions=24, label="{value:.0f}", value=0, tooltip="思考バジェット (0=無効, >0=有効)", expand=True)
+thinking_budget_label = ft.Text("0", width=60)
+thinking_auto_budget_switch = ft.Switch(label="自動バジェット", value=False, tooltip="思考バジェットの自動最適化を使用")
+
+# 思考表示スイッチは削除（バジェットが0でない場合は常に表示）
 
 # --- File Explorer Components (Reverting to simple Column) ---
 # Use dictionary to track checkboxes and their corresponding file paths
@@ -50,12 +52,15 @@ file_explorer_controls = ft.Column(scroll=ft.ScrollMode.ADAPTIVE, expand=True, s
 chat_history_display = ft.ListView(expand=True, spacing=10)
 user_input = ft.TextField(hint_text="Enter prompt...", multiline=True, min_lines=2, max_lines=5, shift_enter=True, expand=True)
 send_button = ft.IconButton(ft.icons.SEND_ROUNDED, tooltip="Send")
+cancel_button = ft.IconButton(ft.icons.CANCEL_ROUNDED, tooltip="Cancel sending", visible=False, icon_color=ft.Colors.ERROR)
 reset_button = ft.IconButton(ft.icons.REFRESH_ROUNDED, tooltip="Reset Conversation")
 status_bar = ft.Text("")
 
 # --- Conversation State ---
 conversation_history: list[Content] = []
 files_sent_in_convo = False
+is_sending = False
+cancel_requested = False
 
 # --- Session Management Components ---
 session_dropdown = ft.Dropdown(
@@ -117,21 +122,50 @@ def extract_thinking(text: str) -> tuple[str, str]:
     main_content = pattern.sub(replace_thinking, text).strip()
     return "\n---\n".join(thinking_parts), main_content
 
+def format_thinking_display(thinking_text: str) -> str:
+    """思考テキストを見やすい形式にフォーマット"""
+    if not thinking_text:
+        return ""
+    
+    # 思考テキストを整形
+    formatted = thinking_text.strip()
+    
+    # 長い思考の場合は省略表示のオプション
+    if len(formatted) > 2000:
+        lines = formatted.split('\n')
+        if len(lines) > 50:
+            preview_lines = lines[:25] + ['...', '（中略）', '...'] + lines[-25:]
+            formatted = '\n'.join(preview_lines)
+    
+    return formatted
+
+# 従来の表示に戻すため削除
+
+# 従来の表示に戻すため削除
+
 def update_thinking_budget_label(e):
     """Update thinking budget label when slider changes"""
-    budget_value = int(e.control.value)
-    thinking_budget_label.value = str(budget_value)
-    if hasattr(e.control, 'page') and e.control.page:
+    thinking_budget_label.value = str(int(e.control.value))
+    try:
         thinking_budget_label.update()
+    except:
+        pass
 
 def update_thinking_controls(e):
-    """Update thinking controls when switch changes"""
-    is_enabled = thinking_enabled_switch.value
-    thinking_budget_slider.disabled = not is_enabled
-    thinking_budget_label.disabled = not is_enabled
-    if hasattr(e.control, 'page') and e.control.page:
+    """Update thinking controls when auto budget switch changes"""
+    is_auto = thinking_auto_budget_switch.value
+    # 自動バジェットがONの時はスライダーを無効化
+    thinking_budget_slider.disabled = is_auto
+    thinking_budget_label.disabled = is_auto
+    if is_auto:
+        thinking_budget_label.value = "Auto"
+    else:
+        thinking_budget_label.value = str(int(thinking_budget_slider.value))
+    try:
         thinking_budget_slider.update()
         thinking_budget_label.update()
+    except:
+        pass
 
 def load_system_prompt_template(e):
     """Load selected system prompt template into the text field"""
@@ -143,7 +177,7 @@ def load_system_prompt_template(e):
 
 # Set up event handlers
 thinking_budget_slider.on_change = update_thinking_budget_label
-thinking_enabled_switch.on_change = update_thinking_controls
+thinking_auto_budget_switch.on_change = update_thinking_controls
 system_prompt_template_dropdown.on_change = load_system_prompt_template
 
 # Populate function for simple Column view (Reverted)
@@ -239,3 +273,5 @@ def scroll_to_bottom():
          chat_history_display.scroll_to(offset=-1, duration=300, curve=ft.AnimationCurve.EASE_OUT)
     except Exception as scroll_err:
          logging.warning(f"Could not scroll chat: {scroll_err}")
+
+# 新しいチャット表示システムは削除（従来の表示方式に戻すため）
