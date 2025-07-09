@@ -257,6 +257,10 @@ def generate_gemini_response(
 
         logging.info(f"Sending request to model: {model_name}")
 
+        # --- 事前に入力トークンを計算 ---
+        input_token_count, _ = get_accurate_token_count(client, model_name, contents, system_instruction)
+        logging.info(f"Pre-calculated input tokens: {input_token_count}")
+
         # --- Log Input Content ---
         try:
             input_summary_log = f"Input Summary (model: {model_name}): "
@@ -299,21 +303,33 @@ def generate_gemini_response(
         # Generate content configの設定
         config_kwargs = {}
         
-        # Thinking設定 - budgetのみで制御
+        # Thinking設定 - モデル別に対応
         thinking_enabled = thinking_budget > 0
         has_thinking = thinking_enabled
+        
+        model_lower = model_name.lower()
+        is_flash_model = "flash" in model_lower
+        is_pro_model = "pro" in model_lower
+        
         if thinking_enabled:
             thinking_config = {"include_thoughts": True}
             
-            # 自動バジェット設定
-            if thinking_auto_budget:
-                # Gemini 2.5では自動最適化を使用（バジェット指定なし）
-                logging.info("Using automatic thinking budget optimization")
-            else:
-                # 手動バジェット設定（Flash以外のモデルでは無視される場合があります）
-                if "flash" in model_name.lower():
+            if is_pro_model:
+                # Gemini 2.5 Proは自動で思考機能が有効（バジェット制御不可）
+                logging.info("Gemini 2.5 Pro detected: Using automatic thinking (budget control unavailable)")
+            elif is_flash_model:
+                # Gemini 2.5 Flashは手動バジェット制御をサポート
+                if thinking_auto_budget:
+                    logging.info("Gemini 2.5 Flash: Using automatic thinking budget optimization")
+                else:
                     thinking_config["thinking_budget"] = thinking_budget
-                logging.info(f"Thinking enabled with budget: {thinking_budget}")
+                    logging.info(f"Gemini 2.5 Flash: Thinking enabled with budget: {thinking_budget}")
+            else:
+                # その他のモデル
+                if thinking_auto_budget:
+                    logging.info("Using automatic thinking budget optimization")
+                else:
+                    logging.info(f"Thinking enabled with budget: {thinking_budget}")
             
             config_kwargs["thinking_config"] = ThinkingConfig(**thinking_config)
         else:
@@ -390,6 +406,18 @@ def generate_gemini_response(
 
         logging.debug(f"Stream finished. Response length: {len(full_response_text)}, Thinking length: {len(full_thinking_text)}")
 
+        # 出力トークン数を推定
+        if full_response_text:
+            # 簡単な推定：4文字=1トークン
+            estimated_output_tokens = len(full_response_text) // 4
+            # 思考トークンも含める
+            if full_thinking_text:
+                estimated_thinking_tokens = len(full_thinking_text) // 4
+                estimated_output_tokens += estimated_thinking_tokens
+            
+            output_token_count = estimated_output_tokens
+            logging.info(f"Estimated output tokens: {output_token_count} (including thinking)")
+
         # 最終コンテンツオブジェクト構築
         try:
             final_model_content = Content(parts=[Part.from_text(full_response_text)], role="model")
@@ -413,11 +441,6 @@ def generate_gemini_response(
             logging.debug(f"Response preview: {full_response_text[:100]}{'...' if len(full_response_text) > 100 else ''}")
     else:
         logging.info("Output: Empty response received.")
-
-    # トークン数の推定（Gen AI SDKはまだ詳細なメタデータを提供しない場合があります）
-    if full_response_text:
-        input_token_count, output_token_count = get_accurate_token_count(client, model_name, contents, system_instruction)
-        logging.info(f"Token Count (estimated): Input={input_token_count}, Output={output_token_count}")
 
     # コスト計算
     input_cost, output_cost, total_cost = calculate_cost_accurate(

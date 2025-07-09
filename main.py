@@ -96,7 +96,7 @@ def main(page: ft.Page):
                         )
                     elif content.role == "model":
                         model_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
-                        response_md = ft.Markdown(f"**Gemini:**\n{model_text}", selectable=True, code_theme="atom-one-dark", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB)
+                        response_md = ft.Markdown(f"**Gemini:**\n{model_text}", selectable=True, code_theme="github-dark", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB)
                         chat_history_display.controls.append(response_md)
                 
                 status_bar.value = f"前回の会話を復元しました ({len(loaded_history)} メッセージ)"
@@ -122,6 +122,10 @@ def main(page: ft.Page):
 
     def update_temp_label(e): temperature_label.value = f"{e.control.value:.2f}"; page.update()
     temperature_slider.on_change = update_temp_label
+
+    # 思考コントロールの初期化
+    from ui_components import update_thinking_for_model
+    update_thinking_for_model()
 
     def reset_conversation(e):
         global files_sent_in_convo
@@ -185,23 +189,7 @@ def main(page: ft.Page):
         if not prompt_text: snackbar = ft.SnackBar(ft.Text("Please enter a prompt."), open=True); page.overlay.append(snackbar); page.update(); return
         if not vertex_ai_initialized: logging.warning("Send: Vertex AI not initialized."); snackbar = ft.SnackBar(ft.Text(f"Vertex AI not initialized. Err: {init_error_message}"), open=True); page.overlay.append(snackbar); page.update(); return
 
-        input_tokens_display = ft.Text("", size=10, italic=True, color=ft.Colors.ON_SURFACE_VARIANT, selectable=True)
-        user_message_column = ft.Column([
-            ft.Text(f"You: {prompt_text}", selectable=True),
-            input_tokens_display
-        ], spacing=2)
-
-        chat_history_display.controls.append(user_message_column); user_input.value = ""; user_input.focus()
-        scroll_to_bottom(); page.update()
-
-        # 送信状態を設定してボタンを切り替え
-        ui_components.is_sending = True
-        send_button.visible = False
-        cancel_button.visible = True
-        reset_button.disabled = True
-        status_bar.value = "Processing..."
-        page.update()
-
+        # プロンプト準備
         current_prompt_parts = [Part.from_text(prompt_text)]; files_appended_now = False
         if not files_sent_in_convo:
             # File reading logic using file_checkboxes (Reverted logic)
@@ -239,7 +227,63 @@ def main(page: ft.Page):
                 page.update()
                 return
 
-        gemini_response_md = ft.Markdown(f"**Gemini:**\n▌", selectable=True, code_theme="atom-one-dark", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB, on_tap_link=lambda e: page.launch_url(e.data))
+        # 事前に入力トークン数を計算
+        current_content = Content(parts=current_prompt_parts, role="user")
+        system_instruction = Content(parts=[Part.from_text(system_prompt_text)], role="system") if system_prompt_text else None
+        
+        try:
+            # Gen AI クライアント初期化
+            from config_manager import get_config
+            from google import genai
+            from google.genai.types import HttpOptions
+            config = get_config()
+            project_id = config.get("vertex_ai_project_id")
+            location = config.get("vertex_ai_location")
+            
+            if project_id and location and project_id != "YOUR_PROJECT_ID" and location != "YOUR_LOCATION":
+                client = genai.Client(
+                    http_options=HttpOptions(api_version="v1"),
+                    vertexai=True,
+                    project=project_id,
+                    location=location
+                )
+                
+                # 入力トークン数を事前計算
+                from vertex_ai_client import get_accurate_token_count
+                pre_input_tokens, _ = get_accurate_token_count(
+                    client, model_dropdown.value, conversation_history + [current_content], system_instruction
+                )
+            else:
+                pre_input_tokens = None
+        except Exception as token_calc_err:
+            logging.warning(f"Pre-calculation of input tokens failed: {token_calc_err}")
+            pre_input_tokens = None
+
+        # 入力トークン表示（事前計算値）
+        input_info_text = ""
+        if pre_input_tokens is not None:
+            input_info_text = f"Input: {pre_input_tokens} tokens (計算中...)"
+        else:
+            input_info_text = "Input tokens: 計算中..."
+
+        input_tokens_display = ft.Text(input_info_text, size=10, italic=True, color=ft.Colors.ON_SURFACE_VARIANT, selectable=True)
+        user_message_column = ft.Column([
+            ft.Text(f"You: {prompt_text}", selectable=True),
+            input_tokens_display
+        ], spacing=2)
+
+        chat_history_display.controls.append(user_message_column); user_input.value = ""; user_input.focus()
+        scroll_to_bottom(); page.update()
+
+        # 送信状態を設定してボタンを切り替え
+        ui_components.is_sending = True
+        send_button.visible = False
+        cancel_button.visible = True
+        reset_button.disabled = True
+        status_bar.value = "Processing..."
+        page.update()
+
+        gemini_response_md = ft.Markdown(f"**Gemini:**\n▌", selectable=True, code_theme="github-dark", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB, on_tap_link=lambda e: page.launch_url(e.data))
         gemini_response_container = ft.Container(content=gemini_response_md, padding=ft.padding.only(bottom=10), expand=True)
         response_row = ft.Row([gemini_response_container], vertical_alignment=ft.CrossAxisAlignment.START)
         chat_history_display.controls.append(response_row)
@@ -274,13 +318,11 @@ def main(page: ft.Page):
             try: selected_max_tokens = int(max_tokens_field.value); assert selected_max_tokens > 0
             except (ValueError, AssertionError): selected_max_tokens = config.get("default_max_output_tokens", 8192); max_tokens_field.value = str(selected_max_tokens); snackbar = ft.SnackBar(ft.Text("Invalid Max Tokens. Using default."), open=True); page.overlay.append(snackbar); page.update()
 
-            system_instruction = Content(parts=[Part.from_text(system_prompt_text)], role="system") if system_prompt_text else None
             # 新しいAPIに合わせて辞書形式で設定
             generation_config = {
                 "temperature": selected_temperature,
                 "max_output_tokens": selected_max_tokens
             }
-            current_content = Content(parts=current_prompt_parts, role="user")
 
             # Thinking設定を取得
             thinking_budget = int(thinking_budget_slider.value)
@@ -296,16 +338,16 @@ def main(page: ft.Page):
                 thinking_auto_budget=thinking_auto_budget_switch.value
             )
 
-            input_info_text = ""
+            # 入力トークン表示を更新（正確な値）
+            final_input_info_text = ""
             if input_tokens is not None:
-                input_info_text = f"({input_tokens} tokens"
+                final_input_info_text = f"Input: {input_tokens} tokens"
                 if input_cost is not None:
-                    input_info_text += f" | Cost: ${input_cost:.6f}"
-                input_info_text += ")"
+                    final_input_info_text += f" | Cost: ${input_cost:.6f}"
             else:
-                input_info_text = "(Input tokens unavailable)"
+                final_input_info_text = "Input tokens: 取得できませんでした"
 
-            input_tokens_display.value = input_info_text
+            input_tokens_display.value = final_input_info_text
             try:
                 input_tokens_display.update()
             except Exception as input_token_update_err:
@@ -315,17 +357,16 @@ def main(page: ft.Page):
             cost_breakdown_available = input_cost is not None and output_cost is not None and total_cost is not None
 
             if output_tokens is not None:
-                output_info_text += f"({output_tokens} output tokens"
+                output_info_text += f"Output: {output_tokens} tokens (推定)"
                 if output_cost is not None:
                      output_info_text += f" | Cost: ${output_cost:.6f}"
-                output_info_text += ")"
 
             if cost_breakdown_available:
                  separator = " | " if output_info_text else ""
-                 output_info_text += f"{separator}Total Cost: ${total_cost:.6f}"
+                 output_info_text += f"{separator}Total: ${total_cost:.6f}"
             elif total_cost is not None:
                  separator = " | " if output_info_text else ""
-                 output_info_text += f"{separator}Total Cost (Input Only): ${total_cost:.6f}"
+                 output_info_text += f"{separator}Total (Input Only): ${total_cost:.6f}"
             elif input_tokens is not None:
                  separator = " | " if output_info_text else ""
                  output_info_text += f"{separator}Cost calculation failed"
@@ -407,12 +448,11 @@ def main(page: ft.Page):
             if 'input_tokens_display' in locals():
                 input_info_text_exc = ""
                 if input_tokens is not None:
-                    input_info_text_exc = f"({input_tokens} tokens"
+                    input_info_text_exc = f"Input: {input_tokens} tokens"
                     if input_cost is not None:
                         input_info_text_exc += f" | Cost: ${input_cost:.6f}"
-                    input_info_text_exc += ")"
                 else:
-                    input_info_text_exc = "(Input tokens unavailable)"
+                    input_info_text_exc = "Input tokens: エラーが発生しました"
                 input_tokens_display.value = input_info_text_exc
                 try:
                     input_tokens_display.update()
@@ -560,7 +600,7 @@ def main(page: ft.Page):
                         )
                     elif content.role == "model":
                         model_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
-                        response_md = ft.Markdown(f"**Gemini:**\n{model_text}", selectable=True, code_theme="atom-one-dark", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB)
+                        response_md = ft.Markdown(f"**Gemini:**\n{model_text}", selectable=True, code_theme="github-dark", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB)
                         chat_history_display.controls.append(response_md)
             
             # セッション情報を更新
@@ -758,6 +798,10 @@ def main(page: ft.Page):
     
     # セッション管理を初期化
     refresh_session_list()
+    
+    # 思考コントロールの初期化
+    from ui_components import update_thinking_for_model
+    update_thinking_for_model()
     
     # 前回の会話を復元
     load_previous_conversation()

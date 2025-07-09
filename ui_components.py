@@ -139,10 +139,6 @@ def format_thinking_display(thinking_text: str) -> str:
     
     return formatted
 
-# 従来の表示に戻すため削除
-
-# 従来の表示に戻すため削除
-
 def update_thinking_budget_label(e):
     """Update thinking budget label when slider changes"""
     thinking_budget_label.value = str(int(e.control.value))
@@ -167,6 +163,63 @@ def update_thinking_controls(e):
     except:
         pass
 
+def update_thinking_for_model(e=None):
+    """モデル変更時に思考制御を更新"""
+    if not model_dropdown.value:
+        return
+    
+    model_name = model_dropdown.value.lower()
+    is_flash_model = "flash" in model_name
+    is_pro_model = "pro" in model_name
+    
+    if is_pro_model:
+        # Proモデル：思考機能をサポートし、バジェット制御も可能（デフォルトで自動最適化推奨）
+        thinking_budget_slider.disabled = False
+        thinking_budget_label.disabled = False
+        thinking_auto_budget_switch.disabled = False
+        thinking_budget_slider.tooltip = "思考バジェット (0=無効, >0=有効, Proモデルでは自動最適化推奨)"
+        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化を使用（Proモデルで推奨）"
+        
+        # Proモデルでは自動バジェットを推奨（デフォルト設定）
+        if not hasattr(update_thinking_for_model, '_pro_initialized'):
+            thinking_auto_budget_switch.value = True
+            thinking_budget_label.value = "Auto"
+            update_thinking_for_model._pro_initialized = True
+        
+        if thinking_auto_budget_switch.value:
+            thinking_budget_label.value = "Auto"
+        else:
+            thinking_budget_label.value = str(int(thinking_budget_slider.value))
+            
+    elif is_flash_model:
+        # Flashモデル：手動でバジェット制御可能
+        thinking_budget_slider.disabled = False
+        thinking_budget_label.disabled = False
+        thinking_auto_budget_switch.disabled = False
+        thinking_budget_slider.tooltip = "思考バジェット (0=無効, >0=有効, Flashモデルで細かい制御可能)"
+        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化を使用（Flashモデル）"
+        
+        if not thinking_auto_budget_switch.value:
+            thinking_budget_label.value = str(int(thinking_budget_slider.value))
+    else:
+        # その他のモデル：制限付きサポート
+        thinking_budget_slider.disabled = False
+        thinking_budget_label.disabled = False
+        thinking_auto_budget_switch.disabled = False
+        thinking_budget_slider.tooltip = "思考バジェット (0=無効, >0=有効, モデルによってはサポートされない場合があります)"
+        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化を使用"
+        
+        if not thinking_auto_budget_switch.value:
+            thinking_budget_label.value = str(int(thinking_budget_slider.value))
+    
+    # UIを更新
+    try:
+        thinking_budget_slider.update()
+        thinking_budget_label.update()
+        thinking_auto_budget_switch.update()
+    except:
+        pass
+
 def load_system_prompt_template(e):
     """Load selected system prompt template into the text field"""
     selected_template = system_prompt_template_dropdown.value
@@ -179,6 +232,7 @@ def load_system_prompt_template(e):
 thinking_budget_slider.on_change = update_thinking_budget_label
 thinking_auto_budget_switch.on_change = update_thinking_controls
 system_prompt_template_dropdown.on_change = load_system_prompt_template
+model_dropdown.on_change = update_thinking_for_model
 
 # Populate function for simple Column view (Reverted)
 def populate_file_explorer(root_dir_path: str):
