@@ -40,32 +40,41 @@ conversation_manager = ConversationManager()
 def format_blockquotes_for_readability(text: str) -> str:
     """
     blockquoteをより読みやすい形式にフォーマット
-    Markdownの > 記法を視覚的に改善
+    Markdownの > 記法を視覚的に改善し、改行も適切に処理
     """
     import re
     
+    # まず通常の改行を適切に処理
+    # 連続する改行を保持し、単一改行も維持
+    text = re.sub(r'\n\n+', '\n\n', text)  # 3つ以上の連続改行を2つに統一
+    
     # blockquoteパターンをマッチ
-    # 複数行の > で始まる行をキャッチ
     def replace_blockquote(match):
         quote_content = match.group(1)
         lines = quote_content.strip().split('\n')
         # > を削除して内容を取得
-        clean_lines = [line.lstrip('> ').strip() for line in lines if line.strip()]
-        clean_content = '\n'.join(clean_lines)
+        clean_lines = []
+        for line in lines:
+            cleaned = line.lstrip('> ').rstrip()
+            clean_lines.append(cleaned)
         
-        # 改善されたフォーマット：引用符記号とインデントを使用
+        # 改善されたフォーマット：引用符記号を使用
         formatted_lines = []
-        for line in clean_content.split('\n'):
+        for line in clean_lines:
             if line.strip():
                 formatted_lines.append(f"💬 {line}")
             else:
-                formatted_lines.append("")
+                formatted_lines.append("")  # 空行も保持
         
         return '\n'.join(formatted_lines)
     
-    # マルチライン blockquote パターン
-    pattern = r'(?:^|\n)((?:>\s*.*(?:\n|$))+)'
+    # マルチライン blockquote パターン（改良版）
+    pattern = r'((?:^|\n)(?:>\s*.*(?:\n|$))+)'
     formatted_text = re.sub(pattern, replace_blockquote, text, flags=re.MULTILINE)
+    
+    # 改行の正規化：Markdown用の改行処理
+    # 単一改行を維持し、段落間の空行も保持
+    formatted_text = re.sub(r'([^\n])\n([^\n])', r'\1  \n\2', formatted_text)  # Markdown改行
     
     return formatted_text
 
@@ -149,7 +158,7 @@ def main(page: ft.Page):
                     elif content.role == "model":
                         model_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
                         formatted_model_text = format_blockquotes_for_readability(model_text)
-                        response_md = ft.Markdown(f"**Gemini:**\n{formatted_model_text}", selectable=True, code_theme="dracula", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB)
+                        response_md = ft.Markdown(f"**Gemini:**\n{formatted_model_text}", selectable=True, code_theme="dracula", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB, auto_follow_links=True)
                         chat_history_display.controls.append(response_md)
                 
                 status_bar.value = f"前回の会話を復元しました ({len(loaded_history)} メッセージ)"
@@ -349,7 +358,7 @@ def main(page: ft.Page):
             logging.warning(f"UI update error during send preparation: {ui_update_err}")
             page.update()
 
-        gemini_response_md = ft.Markdown(f"**Gemini:**\n▌", selectable=True, code_theme="dracula", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB, on_tap_link=lambda e: page.launch_url(e.data))
+        gemini_response_md = ft.Markdown(f"**Gemini:**\n▌", selectable=True, code_theme="dracula", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB, auto_follow_links=True, on_tap_link=lambda e: page.launch_url(e.data))
         gemini_response_container = ft.Container(content=gemini_response_md, padding=ft.padding.only(bottom=10), expand=True)
         response_row = ft.Row([gemini_response_container], vertical_alignment=ft.CrossAxisAlignment.START)
         chat_history_display.controls.append(response_row)
@@ -682,7 +691,7 @@ def main(page: ft.Page):
                     elif content.role == "model":
                         model_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
                         formatted_model_text = format_blockquotes_for_readability(model_text)
-                        response_md = ft.Markdown(f"**Gemini:**\n{formatted_model_text}", selectable=True, code_theme="dracula", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB)
+                        response_md = ft.Markdown(f"**Gemini:**\n{formatted_model_text}", selectable=True, code_theme="dracula", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB, auto_follow_links=True)
                         chat_history_display.controls.append(response_md)
             
             # セッション情報を更新
