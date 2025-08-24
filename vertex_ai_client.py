@@ -3,10 +3,7 @@ import time
 import os
 from google import genai
 from google.genai.types import GenerateContentConfig, ThinkingConfig, HttpOptions
-from vertexai.generative_models import Content, Part
-# Import safety settings and initialization status from main module (or state manager later)
-# For now, assume safety_settings are defined/imported where this function is called
-# and vertex_ai_initialized is checked before calling.
+from gen_ai_types import Content, Part
 
 # --- Cost Calculation ---
 # Gemini 2.5 Flash料金 (正確な料金、2025年最新)

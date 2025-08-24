@@ -4,7 +4,7 @@ import logging
 import os
 import re
 from config_manager import get_config
-from vertexai.generative_models import Content # For conversation history typing
+from gen_ai_types import Content
 
 config = get_config()
 
@@ -51,9 +51,9 @@ file_explorer_controls = ft.Column(scroll=ft.ScrollMode.ADAPTIVE, expand=True, s
 # --- Other UI Components ---
 chat_history_display = ft.ListView(expand=True, spacing=10)
 user_input = ft.TextField(hint_text="Enter prompt...", multiline=True, min_lines=2, max_lines=5, shift_enter=True, expand=True)
-send_button = ft.IconButton(ft.icons.SEND_ROUNDED, tooltip="Send")
-cancel_button = ft.IconButton(ft.icons.CANCEL_ROUNDED, tooltip="Cancel sending", visible=False, icon_color=ft.Colors.ERROR)
-reset_button = ft.IconButton(ft.icons.REFRESH_ROUNDED, tooltip="Reset Conversation")
+send_button = ft.IconButton(ft.Icons.SEND_ROUNDED, tooltip="Send")
+cancel_button = ft.IconButton(ft.Icons.CANCEL_ROUNDED, tooltip="Cancel sending", visible=False, icon_color=ft.Colors.ERROR)
+reset_button = ft.IconButton(ft.Icons.REFRESH_ROUNDED, tooltip="Reset Conversation")
 status_bar = ft.Text("")
 
 # --- Conversation State ---

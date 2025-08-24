@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, Dict, Any
-from vertexai.generative_models import Content, Part
+from gen_ai_types import Content, Part
 
 class ConversationManager:
     """会話履歴の永続化とセッション管理を行うクラス"""

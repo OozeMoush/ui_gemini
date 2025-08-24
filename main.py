@@ -5,12 +5,8 @@ import pathlib
 import logger_setup # Initializes logging
 import config_manager # Loads configuration
 import logging # Still needed for logging calls within this file
-import google.cloud.aiplatform as aiplatform
-from vertexai.generative_models import (
-    # Keep only necessary imports here, others are used in vertex_ai_client
-    Part, Content
-)
-import vertexai.generative_models as generative_models # Re-add this import for safety_settings
+from google import genai
+from google.genai.types import GenerateContentConfig, ThinkingConfig
 # Import necessary UI components, state variables, and helpers from ui_components
 # Ensure ui_components import reflects the reverted state (using file_checkboxes)
 import ui_components
@@ -32,29 +28,75 @@ from ui_components import (
 from vertex_ai_client import generate_gemini_response, calculate_cost
 # Import conversation manager
 from conversation_manager import ConversationManager
+# Import common types
+from gen_ai_types import Part, Content
 
 config = config_manager.get_config()
 
 # --- Conversation Manager Initialization ---
 conversation_manager = ConversationManager()
 
-# --- Vertex AI Initialization ---
-vertex_ai_initialized = False
+# --- Helper Functions ---
+def format_blockquotes_for_readability(text: str) -> str:
+    """
+    blockquoteをより読みやすい形式にフォーマット
+    Markdownの > 記法を視覚的に改善
+    """
+    import re
+    
+    # blockquoteパターンをマッチ
+    # 複数行の > で始まる行をキャッチ
+    def replace_blockquote(match):
+        quote_content = match.group(1)
+        lines = quote_content.strip().split('\n')
+        # > を削除して内容を取得
+        clean_lines = [line.lstrip('> ').strip() for line in lines if line.strip()]
+        clean_content = '\n'.join(clean_lines)
+        
+        # 改善されたフォーマット：引用符記号とインデントを使用
+        formatted_lines = []
+        for line in clean_content.split('\n'):
+            if line.strip():
+                formatted_lines.append(f"💬 {line}")
+            else:
+                formatted_lines.append("")
+        
+        return '\n'.join(formatted_lines)
+    
+    # マルチライン blockquote パターン
+    pattern = r'(?:^|\n)((?:>\s*.*(?:\n|$))+)'
+    formatted_text = re.sub(pattern, replace_blockquote, text, flags=re.MULTILINE)
+    
+    return formatted_text
+
+# --- Gen AI Initialization ---
+gen_ai_initialized = False
 init_error_message = ""
-safety_settings = { category: generative_models.HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE for category in generative_models.HarmCategory }
 try:
     project_id = config.get("vertex_ai_project_id")
     location = config.get("vertex_ai_location")
     if project_id and location and project_id != "YOUR_PROJECT_ID" and location != "YOUR_LOCATION":
-        aiplatform.init(project=project_id, location=location)
-        vertex_ai_initialized = True
-        logging.info(f"Vertex AI initialized for project {project_id} in {location}.")
-        print(f"Vertex AI initialized for project {project_id} in {location}.")
+        # Test client initialization
+        import os
+        os.environ['GOOGLE_GENAI_USE_VERTEXAI'] = 'True'
+        os.environ['GOOGLE_CLOUD_PROJECT'] = project_id
+        os.environ['GOOGLE_CLOUD_LOCATION'] = location
+        
+        from google.genai.types import HttpOptions
+        client = genai.Client(
+            http_options=HttpOptions(api_version="v1"),
+            vertexai=True,
+            project=project_id,
+            location=location
+        )
+        gen_ai_initialized = True
+        logging.info(f"Gen AI initialized for project {project_id} in {location}.")
+        print(f"Gen AI initialized for project {project_id} in {location}.")
     else:
-        init_error_message = "Vertex AI project ID or location not configured properly in config.json."
+        init_error_message = "Project ID or location not configured properly in config.json."
         logging.warning(init_error_message); print(f"Warning: {init_error_message}")
 except Exception as e:
-    init_error_message = f"Error initializing Vertex AI: {e}"; logging.error(init_error_message, exc_info=True); print(f"Error: {init_error_message}")
+    init_error_message = f"Error initializing Gen AI: {e}"; logging.error(init_error_message, exc_info=True); print(f"Error: {init_error_message}")
 
 # --- Global variables ---
 refresh_button = None
@@ -64,6 +106,16 @@ current_session_name = "default"
 def main(page: ft.Page):
     page.title = "Gemini UI Chat"
     page.theme_mode = ft.ThemeMode.DARK # Keep Dark theme
+    
+    # カスタムダークテーマでblockquoteを改善
+    page.theme = ft.Theme(
+        color_scheme=ft.ColorScheme(
+            # blockquoteのバックグラウンドをより読みやすい色に設定
+            surface_variant=ft.Colors.GREY_900,  # blockquoteの背景
+            on_surface_variant=ft.Colors.GREY_100,  # blockquote内のテキスト色
+        )
+    )
+    
     logging.info("Main UI function started.")
     # Assign page context to UI elements that need it for updates
     status_bar.page = page; file_explorer_controls.page = page; chat_history_display.page = page
@@ -71,7 +123,7 @@ def main(page: ft.Page):
 
     # Display init error via SnackBar using the correct method
     if init_error_message:
-        snackbar = ft.SnackBar(ft.Text(f"Vertex AI Init Error: {init_error_message}"), open=True)
+        snackbar = ft.SnackBar(ft.Text(f"Gen AI Init Error: {init_error_message}"), open=True)
         if hasattr(page, 'overlay'):
              page.overlay.append(snackbar)
         else:
@@ -96,7 +148,8 @@ def main(page: ft.Page):
                         )
                     elif content.role == "model":
                         model_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
-                        response_md = ft.Markdown(f"**Gemini:**\n{model_text}", selectable=True, code_theme="github-dark", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB)
+                        formatted_model_text = format_blockquotes_for_readability(model_text)
+                        response_md = ft.Markdown(f"**Gemini:**\n{formatted_model_text}", selectable=True, code_theme="dracula", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB)
                         chat_history_display.controls.append(response_md)
                 
                 status_bar.value = f"前回の会話を復元しました ({len(loaded_history)} メッセージ)"
@@ -180,14 +233,18 @@ def main(page: ft.Page):
     def send_message(e):
         global files_sent_in_convo
         
+        # 既に送信中の場合は重複送信を防ぐ
+        if ui_components.is_sending:
+            logging.warning("Send attempt blocked: already sending")
+            return
+        
         # キャンセルリクエストをリセット
         ui_components.cancel_requested = False
-        ui_components.is_sending = False
         
         prompt_text = user_input.value.strip()
         system_prompt_text = system_prompt_field.value.strip()
         if not prompt_text: snackbar = ft.SnackBar(ft.Text("Please enter a prompt."), open=True); page.overlay.append(snackbar); page.update(); return
-        if not vertex_ai_initialized: logging.warning("Send: Vertex AI not initialized."); snackbar = ft.SnackBar(ft.Text(f"Vertex AI not initialized. Err: {init_error_message}"), open=True); page.overlay.append(snackbar); page.update(); return
+        if not gen_ai_initialized: logging.warning("Send: Gen AI not initialized."); snackbar = ft.SnackBar(ft.Text(f"Gen AI not initialized. Err: {init_error_message}"), open=True); page.overlay.append(snackbar); page.update(); return
 
         # プロンプト準備
         current_prompt_parts = [Part.from_text(prompt_text)]; files_appended_now = False
@@ -275,15 +332,24 @@ def main(page: ft.Page):
         chat_history_display.controls.append(user_message_column); user_input.value = ""; user_input.focus()
         scroll_to_bottom(); page.update()
 
-        # 送信状態を設定してボタンを切り替え
+        # 送信状態を設定してボタンを切り替え（エラーチェック後に設定）
         ui_components.is_sending = True
         send_button.visible = False
         cancel_button.visible = True
         reset_button.disabled = True
         status_bar.value = "Processing..."
-        page.update()
+        # UIの更新を強制
+        try:
+            send_button.update()
+            cancel_button.update()
+            reset_button.update()
+            status_bar.update()
+            page.update()
+        except Exception as ui_update_err:
+            logging.warning(f"UI update error during send preparation: {ui_update_err}")
+            page.update()
 
-        gemini_response_md = ft.Markdown(f"**Gemini:**\n▌", selectable=True, code_theme="github-dark", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB, on_tap_link=lambda e: page.launch_url(e.data))
+        gemini_response_md = ft.Markdown(f"**Gemini:**\n▌", selectable=True, code_theme="dracula", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB, on_tap_link=lambda e: page.launch_url(e.data))
         gemini_response_container = ft.Container(content=gemini_response_md, padding=ft.padding.only(bottom=10), expand=True)
         response_row = ft.Row([gemini_response_container], vertical_alignment=ft.CrossAxisAlignment.START)
         chat_history_display.controls.append(response_row)
@@ -333,7 +399,7 @@ def main(page: ft.Page):
             full_response_text, final_model_content, api_error_message, input_tokens, output_tokens, input_cost, output_cost, total_cost, thinking_text = generate_gemini_response(
                 model_name=selected_model_name, system_instruction=system_instruction,
                 contents=conversation_history + [current_content], generation_config=generation_config,
-                safety_settings=safety_settings, stream_update_callback=stream_callback,
+                safety_settings={}, stream_update_callback=stream_callback,
                 thinking_budget=thinking_budget,
                 thinking_auto_budget=thinking_auto_budget_switch.value
             )
@@ -391,7 +457,9 @@ def main(page: ft.Page):
                 
                 logging.info(f"Final main text (first 200): {main_text[:200]}...")
 
-                gemini_response_md.value = f"**Gemini:**\n{main_text}"
+                # blockquoteの見た目を改善するために前処理
+                formatted_main_text = format_blockquotes_for_readability(main_text)
+                gemini_response_md.value = f"**Gemini:**\n{formatted_main_text}"
 
                 thinking_panel_widget = None
                 if thinking_text:
@@ -495,9 +563,22 @@ def main(page: ft.Page):
             try: page.update()
             except Exception as final_update_err: logging.error(f"Error during final page update: {final_update_err}")
 
-    send_button.on_click = send_message
+    # デバウンス機能付きの送信ハンドラー
+    last_submit_time = [0]  # リストを使用してnonlocalスコープを回避
+    
+    def debounced_send_message(e):
+        """デバウンス機能付きの送信処理"""
+        current_time = time.time()
+        # 200ms以内の連続送信を防ぐ
+        if current_time - last_submit_time[0] < 0.2:
+            logging.info("Send attempt debounced (too frequent)")
+            return
+        last_submit_time[0] = current_time
+        send_message(e)
+    
+    send_button.on_click = debounced_send_message
     cancel_button.on_click = cancel_send
-    user_input.on_submit = send_message
+    user_input.on_submit = debounced_send_message
 
     parameter_bar = ft.Container(content=ft.Column([
         ft.Row([
@@ -600,7 +681,8 @@ def main(page: ft.Page):
                         )
                     elif content.role == "model":
                         model_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
-                        response_md = ft.Markdown(f"**Gemini:**\n{model_text}", selectable=True, code_theme="github-dark", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB)
+                        formatted_model_text = format_blockquotes_for_readability(model_text)
+                        response_md = ft.Markdown(f"**Gemini:**\n{formatted_model_text}", selectable=True, code_theme="dracula", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB)
                         chat_history_display.controls.append(response_md)
             
             # セッション情報を更新
@@ -708,7 +790,7 @@ def main(page: ft.Page):
                                     )
                                 elif content.role == "model":
                                     model_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
-                                    response_md = ft.Markdown(f"**Gemini:**\n{model_text}", selectable=True, code_theme="atom-one-dark", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB)
+                                    response_md = ft.Markdown(f"**Gemini:**\n{model_text}", selectable=True, code_theme="dracula", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB)
                                     chat_history_display.controls.append(response_md)
                         
                         # UI更新
