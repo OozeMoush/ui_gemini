@@ -401,7 +401,7 @@ def generate_gemini_response(
                 full_response_text = thinking_pattern.sub("", full_response_text).strip()
                 logging.info(f"Extracted thinking text: {len(full_thinking_text)} chars")
 
-        logging.debug(f"Stream finished. Response length: {len(full_response_text)}, Thinking length: {len(full_thinking_text)}")
+        logging.info(f"Stream finished. Response length: {len(full_response_text)}, Thinking length: {len(full_thinking_text)}")
 
         # 出力トークン数を推定
         if full_response_text:
@@ -433,9 +433,9 @@ def generate_gemini_response(
         logging.info(f"Output: Success - Response length: {len(full_response_text)}")
         if full_thinking_text:
             logging.info(f"Thinking: Success - Thinking length: {len(full_thinking_text)}")
-        # 応答テキストの詳細はDEBUGレベルでより少なく
+        # 応答テキストの詳細はDEBUGレベルで表示
         if logging.getLogger().isEnabledFor(logging.DEBUG):
-            logging.debug(f"Response preview: {full_response_text[:100]}{'...' if len(full_response_text) > 100 else ''}")
+            logging.debug(f"Response preview: {full_response_text[:150]}{'...' if len(full_response_text) > 150 else ''}")
     else:
         logging.info("Output: Empty response received.")
 

@@ -401,7 +401,7 @@ def main(page: ft.Page):
 
             # Thinking設定を取得
             thinking_budget = int(thinking_budget_slider.value)
-            logging.info(f"DEBUG: UI思考バジェット値: {thinking_budget}, 自動バジェット: {thinking_auto_budget_switch.value}")
+            logging.debug(f"UI思考バジェット値: {thinking_budget}, 自動バジェット: {thinking_auto_budget_switch.value}")
 
             status_bar.value = f"Sending to {selected_model_name}..."; page.update()
 

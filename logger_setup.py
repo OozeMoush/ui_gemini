@@ -43,6 +43,20 @@ def setup_logging():
                 handler.setFormatter(console_formatter)
                 handler.setLevel(console_level)
         logger.info("--- Logging Already Initialized (Handlers potentially updated) ---")
+    
+    # Fletの詳細なUIログを無効化
+    flet_loggers_to_suppress = [
+        'flet_socket_server',
+        'page',
+        'flet.page',
+        'websockets',
+        'flet_core',
+        'flet'
+    ]
+    
+    for flet_logger_name in flet_loggers_to_suppress:
+        flet_logger = logging.getLogger(flet_logger_name)
+        flet_logger.setLevel(logging.WARNING)  # WARNINGレベル以上のみ表示
 
 
 # Call setup function immediately when module is imported
