@@ -247,6 +247,20 @@ def main(page: ft.Page):
             logging.warning("Send attempt blocked: already sending")
             return
         
+        # 即座にUI状態を更新してフィードバックを提供
+        ui_components.is_sending = True
+        send_button.visible = False
+        cancel_button.visible = True
+        reset_button.disabled = True
+        # 即座にUI更新を実行
+        try:
+            send_button.update()
+            cancel_button.update()
+            reset_button.update()
+            page.update()
+        except Exception as immediate_ui_err:
+            logging.warning(f"Immediate UI update error: {immediate_ui_err}")
+        
         # キャンセルリクエストをリセット
         ui_components.cancel_requested = False
         
@@ -338,25 +352,31 @@ def main(page: ft.Page):
             input_tokens_display
         ], spacing=2)
 
-        chat_history_display.controls.append(user_message_column); user_input.value = ""; user_input.focus()
-        scroll_to_bottom(); page.update()
-
-        # 送信状態を設定してボタンを切り替え（エラーチェック後に設定）
-        ui_components.is_sending = True
-        send_button.visible = False
-        cancel_button.visible = True
-        reset_button.disabled = True
-        status_bar.value = "Processing..."
-        # UIの更新を強制
+        chat_history_display.controls.append(user_message_column)
+        user_input.value = ""  # 即座に入力フィールドをクリア
+        
+        # UI更新を即座に実行
         try:
-            send_button.update()
-            cancel_button.update()
-            reset_button.update()
+            user_input.update()
+            chat_history_display.update()
+            page.update()
+        except Exception as ui_clear_err:
+            logging.warning(f"UI clear error: {ui_clear_err}")
+        
+        # フォーカスを戻す
+        try:
+            user_input.focus()
+        except:
+            pass
+        
+        scroll_to_bottom()
+
+        # ステータスバーのみ更新（ボタン状態は既に変更済み）
+        status_bar.value = "Processing..."
+        try:
             status_bar.update()
-            page.update()
-        except Exception as ui_update_err:
-            logging.warning(f"UI update error during send preparation: {ui_update_err}")
-            page.update()
+        except Exception as status_update_err:
+            logging.warning(f"Status update error: {status_update_err}")
 
         gemini_response_md = ft.Markdown(f"**Gemini:**\n▌", selectable=True, code_theme="dracula", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB, auto_follow_links=True, on_tap_link=lambda e: page.launch_url(e.data))
         gemini_response_container = ft.Container(content=gemini_response_md, padding=ft.padding.only(bottom=10), expand=True)
@@ -549,6 +569,14 @@ def main(page: ft.Page):
             cancel_button.visible = False
             reset_button.disabled = False
             
+            # 即座にボタン状態をリセット
+            try:
+                send_button.update()
+                cancel_button.update()
+                reset_button.update()
+            except Exception as button_reset_err:
+                logging.warning(f"Button reset error: {button_reset_err}")
+            
             # キャンセルされた場合の処理
             if was_cancelled:
                 status_bar.value = "送信がキャンセルされました"
@@ -569,8 +597,11 @@ def main(page: ft.Page):
                 except Exception as session_update_err:
                     logging.warning(f"セッション情報更新エラー: {session_update_err}")
             
-            try: page.update()
-            except Exception as final_update_err: logging.error(f"Error during final page update: {final_update_err}")
+            # 最終的なページ更新
+            try: 
+                page.update()
+            except Exception as final_update_err: 
+                logging.error(f"Error during final page update: {final_update_err}")
 
     # デバウンス機能付きの送信ハンドラー
     last_submit_time = [0]  # リストを使用してnonlocalスコープを回避
