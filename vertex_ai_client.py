@@ -3,7 +3,22 @@ import time
 import os
 from google import genai
 from google.genai.types import GenerateContentConfig, ThinkingConfig, HttpOptions
-from gen_ai_types import Content, Part
+# Content, Partクラスをここで定義
+class Part:
+    """メッセージの一部を表すクラス"""
+    def __init__(self, text: str = ""):
+        self.text = text
+    
+    @classmethod
+    def from_text(cls, text: str):
+        """テキストからPartオブジェクトを作成"""
+        return cls(text)
+
+class Content:
+    """会話コンテンツを表すクラス"""
+    def __init__(self, parts: list[Part], role: str):
+        self.parts = parts
+        self.role = role
 
 # --- Cost Calculation ---
 # Gemini 2.5 Flash料金 (正確な料金、2025年最新)
@@ -301,7 +316,7 @@ def generate_gemini_response(
         config_kwargs = {}
         
         # Thinking設定 - モデル別に対応
-        thinking_enabled = thinking_budget > 0
+        thinking_enabled = thinking_budget != 0  # 0以外で有効（-1も含む）
         has_thinking = thinking_enabled
         
         model_lower = model_name.lower()
@@ -311,22 +326,14 @@ def generate_gemini_response(
         if thinking_enabled:
             thinking_config = {"include_thoughts": True}
             
-            if is_pro_model:
-                # Gemini 2.5 Proは自動で思考機能が有効（バジェット制御不可）
-                logging.info("Gemini 2.5 Pro detected: Using automatic thinking (budget control unavailable)")
-            elif is_flash_model:
-                # Gemini 2.5 Flashは手動バジェット制御をサポート
-                if thinking_auto_budget:
-                    logging.info("Gemini 2.5 Flash: Using automatic thinking budget optimization")
-                else:
-                    thinking_config["thinking_budget"] = thinking_budget
-                    logging.info(f"Gemini 2.5 Flash: Thinking enabled with budget: {thinking_budget}")
-            else:
-                # その他のモデル
-                if thinking_auto_budget:
-                    logging.info("Using automatic thinking budget optimization")
-                else:
-                    logging.info(f"Thinking enabled with budget: {thinking_budget}")
+            if thinking_budget == -1 or thinking_auto_budget:
+                # 自動バジェット設定（-1で自動制御）
+                logging.info(f"Using automatic thinking budget (-1) for {model_name}")
+                # thinking_budgetは設定しない（デフォルトで自動）
+            elif thinking_budget > 0:
+                # 手動バジェット設定
+                thinking_config["thinking_budget"] = thinking_budget
+                logging.info(f"Thinking enabled with manual budget: {thinking_budget} for {model_name}")
             
             config_kwargs["thinking_config"] = ThinkingConfig(**thinking_config)
         else:
@@ -351,43 +358,75 @@ def generate_gemini_response(
                 contents=gen_ai_contents
             )
 
-        # ストリーミング処理 - キャンセル対応付き
-        for chunk in response_stream:
-            try:
-                # 通常のテキスト応答の処理
-                if hasattr(chunk, 'text') and chunk.text:
-                    chunk_text = chunk.text
-                    full_response_text += chunk_text
-                    
-                    # コールバックを呼び出し、キャンセルがリクエストされていればFalseが返される
-                    continue_streaming = stream_update_callback(full_response_text)
-                    if continue_streaming is False:
-                        logging.info("Stream cancelled by user request")
-                        error_message = "キャンセルされました"
-                        break
+        # 最終レスポンスを取得（ストリーミングではなく）
+        final_response = None
+        thinking_token_count = 0
+        
+        try:
+            # ストリーミングではなく通常のレスポンスを取得してメタデータにアクセス
+            if generation_config_obj:
+                final_response = client.models.generate_content(
+                    model=model_name,
+                    contents=gen_ai_contents,
+                    config=generation_config_obj
+                )
+            else:
+                final_response = client.models.generate_content(
+                    model=model_name,
+                    contents=gen_ai_contents
+                )
+            
+            # レスポンステキストを取得
+            if hasattr(final_response, 'text'):
+                full_response_text = final_response.text
+            
+            # 思考トークン数を取得
+            if hasattr(final_response, 'usage_metadata') and hasattr(final_response.usage_metadata, 'thoughts_token_count'):
+                thinking_token_count = final_response.usage_metadata.thoughts_token_count
+                logging.info(f"Thinking tokens used: {thinking_token_count}")
+            
+            # ストリーミング風に表示更新
+            stream_update_callback(full_response_text)
+            
+        except Exception as response_err:
+            logging.error(f"Error getting final response: {response_err}")
+            # フォールバック：ストリーミング処理
+            for chunk in response_stream:
+                try:
+                    # 通常のテキスト応答の処理
+                    if hasattr(chunk, 'text') and chunk.text:
+                        chunk_text = chunk.text
+                        full_response_text += chunk_text
                         
-                elif hasattr(chunk, 'candidates') and chunk.candidates:
-                    # 代替的な応答テキスト取得方法
-                    for candidate in chunk.candidates:
-                        if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
-                            for part in candidate.content.parts:
-                                if hasattr(part, 'text') and part.text:
-                                    chunk_text = part.text
-                                    full_response_text += chunk_text
-                                    
-                                    # キャンセルチェック
-                                    continue_streaming = stream_update_callback(full_response_text)
-                                    if continue_streaming is False:
-                                        logging.info("Stream cancelled by user request")
-                                        error_message = "キャンセルされました"
-                                        break
-                        if error_message:  # 内側のループから抜けた場合、外側のループも抜ける
+                        # コールバックを呼び出し、キャンセルがリクエストされていればFalseが返される
+                        continue_streaming = stream_update_callback(full_response_text)
+                        if continue_streaming is False:
+                            logging.info("Stream cancelled by user request")
+                            error_message = "キャンセルされました"
                             break
-                    if error_message:
-                        break
+                            
+                    elif hasattr(chunk, 'candidates') and chunk.candidates:
+                        # 代替的な応答テキスト取得方法
+                        for candidate in chunk.candidates:
+                            if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                                for part in candidate.content.parts:
+                                    if hasattr(part, 'text') and part.text:
+                                        chunk_text = part.text
+                                        full_response_text += chunk_text
+                                        
+                                        # キャンセルチェック
+                                        continue_streaming = stream_update_callback(full_response_text)
+                                        if continue_streaming is False:
+                                            logging.info("Stream cancelled by user request")
+                                            error_message = "キャンセルされました"
+                                            break
+                            if error_message:  # 内側のループから抜けた場合、外側のループも抜ける
+                                break
+                        if error_message:
+                            break
 
-            except Exception as chunk_proc_err:
-                logging.error(f"Error processing stream chunk: {chunk_proc_err}", exc_info=True)
+                except Exception as chunk_proc_err:
+                    logging.error(f"Error processing stream chunk: {chunk_proc_err}", exc_info=True)
 
         # 思考テキストの抽出 - 最終レスポンスから
         if thinking_enabled and full_response_text:
@@ -403,17 +442,26 @@ def generate_gemini_response(
 
         logging.info(f"Stream finished. Response length: {len(full_response_text)}, Thinking length: {len(full_thinking_text)}")
 
-        # 出力トークン数を推定
+        # 出力トークン数を取得または推定
         if full_response_text:
-            # 簡単な推定：4文字=1トークン
-            estimated_output_tokens = len(full_response_text) // 4
-            # 思考トークンも含める
-            if full_thinking_text:
-                estimated_thinking_tokens = len(full_thinking_text) // 4
-                estimated_output_tokens += estimated_thinking_tokens
-            
-            output_token_count = estimated_output_tokens
-            logging.info(f"Estimated output tokens: {output_token_count} (including thinking)")
+            # まず正確なトークン数を試す
+            if final_response and hasattr(final_response, 'usage_metadata'):
+                usage = final_response.usage_metadata
+                if hasattr(usage, 'candidates_token_count'):
+                    output_token_count = usage.candidates_token_count
+                    logging.info(f"Accurate output tokens: {output_token_count}")
+                elif hasattr(usage, 'total_token_count') and input_token_count:
+                    # 全体から入力を引いて出力を計算
+                    output_token_count = usage.total_token_count - input_token_count
+                    logging.info(f"Calculated output tokens: {output_token_count}")
+                else:
+                    # 推定値を使用
+                    output_token_count = len(full_response_text) // 4
+                    logging.info(f"Estimated output tokens: {output_token_count}")
+            else:
+                # 推定値を使用
+                output_token_count = len(full_response_text) // 4
+                logging.info(f"Estimated output tokens: {output_token_count}")
 
         # 最終コンテンツオブジェクト構築
         try:
@@ -453,5 +501,5 @@ def generate_gemini_response(
     else:
         logging.warning("Could not calculate estimated cost (input tokens unavailable).")
 
-    # Return calculated/estimated tokens, costs, and thinking text
-    return full_response_text, final_model_content, error_message, input_token_count, output_token_count, input_cost, output_cost, total_cost, full_thinking_text
+    # Return calculated/estimated tokens, costs, thinking text, and thinking token count
+    return full_response_text, final_model_content, error_message, input_token_count, output_token_count, input_cost, output_cost, total_cost, full_thinking_text, thinking_token_count

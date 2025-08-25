@@ -28,8 +28,8 @@ from ui_components import (
 from vertex_ai_client import generate_gemini_response, calculate_cost
 # Import conversation manager
 from conversation_manager import ConversationManager
-# Import common types
-from gen_ai_types import Part, Content
+# Import common types from vertex_ai_client
+from vertex_ai_client import Part, Content
 
 config = config_manager.get_config()
 
@@ -40,43 +40,39 @@ conversation_manager = ConversationManager()
 def format_blockquotes_for_readability(text: str) -> str:
     """
     blockquoteをより読みやすい形式にフォーマット
-    Markdownの > 記法を視覚的に改善し、改行も適切に処理
+    タブやインデントを保持し、見やすいプレフィックスを追加
     """
     import re
     
-    # まず通常の改行を適切に処理
-    # 連続する改行を保持し、単一改行も維持
-    text = re.sub(r'\n\n+', '\n\n', text)  # 3つ以上の連続改行を2つに統一
+    # タブや空白を保持しながら処理
+    lines = text.split('\n')
+    formatted_lines = []
+    in_blockquote = False
     
-    # blockquoteパターンをマッチ
-    def replace_blockquote(match):
-        quote_content = match.group(1)
-        lines = quote_content.strip().split('\n')
-        # > を削除して内容を取得
-        clean_lines = []
-        for line in lines:
-            cleaned = line.lstrip('> ').rstrip()
-            clean_lines.append(cleaned)
-        
-        # 改善されたフォーマット：引用符記号を使用
-        formatted_lines = []
-        for line in clean_lines:
-            if line.strip():
-                formatted_lines.append(f"💬 {line}")
+    for line in lines:
+        # blockquoteの開始/終了を検出
+        if line.strip().startswith('>'):
+            in_blockquote = True
+            # > を削除して、タブ/空白を保持
+            cleaned = line.lstrip('>').lstrip(' ')
+            # シンプルなプレフィックスを使用（絵文字なし）
+            if cleaned.strip():
+                formatted_lines.append(f"│ {cleaned}")
             else:
-                formatted_lines.append("")  # 空行も保持
-        
-        return '\n'.join(formatted_lines)
+                formatted_lines.append("│")
+        elif in_blockquote and line.strip() == "":
+            # blockquote内の空行
+            formatted_lines.append("│")
+        elif in_blockquote and not line.strip().startswith('>'):
+            # blockquoteの終了
+            in_blockquote = False
+            formatted_lines.append(line)
+        else:
+            # 通常の行
+            in_blockquote = False
+            formatted_lines.append(line)
     
-    # マルチライン blockquote パターン（改良版）
-    pattern = r'((?:^|\n)(?:>\s*.*(?:\n|$))+)'
-    formatted_text = re.sub(pattern, replace_blockquote, text, flags=re.MULTILINE)
-    
-    # 改行の正規化：Markdown用の改行処理
-    # 単一改行を維持し、段落間の空行も保持
-    formatted_text = re.sub(r'([^\n])\n([^\n])', r'\1  \n\2', formatted_text)  # Markdown改行
-    
-    return formatted_text
+    return '\n'.join(formatted_lines)
 
 # --- Gen AI Initialization ---
 gen_ai_initialized = False
@@ -116,12 +112,14 @@ def main(page: ft.Page):
     page.title = "Gemini UI Chat"
     page.theme_mode = ft.ThemeMode.DARK # Keep Dark theme
     
-    # カスタムダークテーマでblockquoteを改善
+    # シンプルで読みやすいダークテーマ
     page.theme = ft.Theme(
         color_scheme=ft.ColorScheme(
-            # blockquoteのバックグラウンドをより読みやすい色に設定
-            surface_variant=ft.Colors.GREY_900,  # blockquoteの背景
-            on_surface_variant=ft.Colors.GREY_100,  # blockquote内のテキスト色
+            # より読みやすい配色に調整
+            surface_variant=ft.Colors.GREY_800,  # 引用部分の背景
+            on_surface_variant=ft.Colors.GREY_200,  # 引用部分のテキスト
+            primary=ft.Colors.BLUE_400,  # アクセント色
+            secondary=ft.Colors.CYAN_400,  # セカンダリ色
         )
     )
     
@@ -419,18 +417,25 @@ def main(page: ft.Page):
                 "max_output_tokens": selected_max_tokens
             }
 
-            # Thinking設定を取得
-            thinking_budget = int(thinking_budget_slider.value)
-            logging.debug(f"UI思考バジェット値: {thinking_budget}, 自動バジェット: {thinking_auto_budget_switch.value}")
+            # Thinking設定を取得（表示はしないが機能は有効）
+            thinking_auto = thinking_auto_budget_switch.value
+            if thinking_auto:
+                # 自動バジェット：-1を送信
+                thinking_budget = -1
+                logging.debug(f"自動思考バジェット使用: -1")
+            else:
+                # 手動バジェット：UI設定値を使用
+                thinking_budget = int(thinking_budget_slider.value)
+                logging.debug(f"手動思考バジェット値: {thinking_budget}")
 
             status_bar.value = f"Sending to {selected_model_name}..."; page.update()
 
-            full_response_text, final_model_content, api_error_message, input_tokens, output_tokens, input_cost, output_cost, total_cost, thinking_text = generate_gemini_response(
+            full_response_text, final_model_content, api_error_message, input_tokens, output_tokens, input_cost, output_cost, total_cost, thinking_text, thinking_tokens = generate_gemini_response(
                 model_name=selected_model_name, system_instruction=system_instruction,
                 contents=conversation_history + [current_content], generation_config=generation_config,
                 safety_settings={}, stream_update_callback=stream_callback,
-                thinking_budget=thinking_budget,
-                thinking_auto_budget=thinking_auto_budget_switch.value
+                thinking_budget=thinking_budget,  # 自動(-1)または手動設定値
+                thinking_auto_budget=thinking_auto  # UI設定を使用
             )
 
             # 入力トークン表示を更新（正確な値）
@@ -452,7 +457,9 @@ def main(page: ft.Page):
             cost_breakdown_available = input_cost is not None and output_cost is not None and total_cost is not None
 
             if output_tokens is not None:
-                output_info_text += f"Output: {output_tokens} tokens (推定)"
+                output_info_text += f"Output: {output_tokens} tokens"
+                if thinking_tokens > 0:
+                    output_info_text += f" (+{thinking_tokens} thinking)"
                 if output_cost is not None:
                      output_info_text += f" | Cost: ${output_cost:.6f}"
 
@@ -475,30 +482,15 @@ def main(page: ft.Page):
             elif full_response_text is not None and final_model_content is not None:
                 logging.debug(f"Stream finished. Full raw length: {len(full_response_text)}")
 
-                # 古いextract_thinking関数の代わりに、APIから返されたthinking_textを使用
-                if thinking_text:
-                    main_text = full_response_text
-                    logging.info(f"Thinking text received from API: {'Yes' if thinking_text else 'None'}")
-                else:
-                    # fallbackとして従来の抽出方法も試す
-                    thinking_text, main_text = extract_thinking(full_response_text)
-                    logging.info(f"Extracted thinking using regex: {'Yes' if thinking_text else 'None'}")
-                
+                # Thinking機能は無効化されているため、レスポンステキストをそのまま使用
+                main_text = full_response_text
                 logging.info(f"Final main text (first 200): {main_text[:200]}...")
 
                 # blockquoteの見た目を改善するために前処理
                 formatted_main_text = format_blockquotes_for_readability(main_text)
                 gemini_response_md.value = f"**Gemini:**\n{formatted_main_text}"
 
-                thinking_panel_widget = None
-                if thinking_text:
-                    thinking_panel_widget = ft.ExpansionPanelList(
-                        expand_icon_color=ft.Colors.ON_SURFACE_VARIANT, elevation=1, divider_color=ft.Colors.OUTLINE_VARIANT,
-                        controls=[ft.ExpansionPanel(
-                                header=ft.ListTile(title=ft.Text("🤔 Thinking Process", italic=True, weight=ft.FontWeight.W_600, color=ft.Colors.ON_SURFACE)),
-                                content=ft.Container(ft.Text(thinking_text, selectable=True, italic=True, color=ft.Colors.ON_SURFACE), padding=ft.padding.only(left=15, right=15, bottom=10)))])
-                    chat_history_display.controls.append(thinking_panel_widget)
-                    logging.info("Added thinking panel with API thinking text.")
+                # Thinking パネルは表示しない
 
                 output_info_display_widget = ft.Text(output_info_text, size=10, italic=True, color=ft.Colors.ON_SURFACE_VARIANT, selectable=True)
 
@@ -920,10 +912,6 @@ def main(page: ft.Page):
     
     # セッション管理を初期化
     refresh_session_list()
-    
-    # 思考コントロールの初期化
-    from ui_components import update_thinking_for_model
-    update_thinking_for_model()
     
     # 前回の会話を復元
     load_previous_conversation()

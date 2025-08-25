@@ -4,7 +4,7 @@ import logging
 import os
 import re
 from config_manager import get_config
-from gen_ai_types import Content
+from vertex_ai_client import Content
 
 config = get_config()
 
@@ -36,8 +36,9 @@ system_prompt_template_dropdown = ft.Dropdown(
 system_prompt_field = ft.TextField(label="System Prompt", value=config.get("default_system_prompt", ""), tooltip="Optional system instruction", multiline=True, min_lines=1, max_lines=5, expand=True)
 
 # --- Thinking Controls ---
-thinking_budget_slider = ft.Slider(min=0, max=24576, divisions=24, label="{value:.0f}", value=0, tooltip="思考バジェット (0=無効, >0=有効)", expand=True)
-thinking_budget_label = ft.Text("0", width=60)
+# デフォルトでGemini 2.5 Flashの制限値を使用（最大24576）
+thinking_budget_slider = ft.Slider(min=0, max=24576, divisions=24, label="{value:.0f}", value=8192, tooltip="思考バジェット (0=無効, -1=自動)", expand=True)
+thinking_budget_label = ft.Text("8192", width=60)
 thinking_auto_budget_switch = ft.Switch(label="自動バジェット", value=False, tooltip="思考バジェットの自動最適化を使用")
 
 # 思考表示スイッチは削除（バジェットが0でない場合は常に表示）
@@ -171,46 +172,49 @@ def update_thinking_for_model(e=None):
     model_name = model_dropdown.value.lower()
     is_flash_model = "flash" in model_name
     is_pro_model = "pro" in model_name
+    is_flash_lite = "flash-lite" in model_name
     
     if is_pro_model:
-        # Proモデル：思考機能をサポートし、バジェット制御も可能（デフォルトで自動最適化推奨）
-        thinking_budget_slider.disabled = False
-        thinking_budget_label.disabled = False
-        thinking_auto_budget_switch.disabled = False
-        thinking_budget_slider.tooltip = "思考バジェット (0=無効, >0=有効, Proモデルでは自動最適化推奨)"
-        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化を使用（Proモデルで推奨）"
+        # Gemini 2.5 Pro: 128-32768トークン、思考無効化不可
+        thinking_budget_slider.min = 128
+        thinking_budget_slider.max = 32768
+        thinking_budget_slider.divisions = 32
+        thinking_budget_slider.tooltip = "思考バジェット (128-32768, Proでは思考無効化不可, -1=自動)"
+        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化（Proモデル推奨）"
         
-        # Proモデルでは自動バジェットを推奨（デフォルト設定）
-        if not hasattr(update_thinking_for_model, '_pro_initialized'):
-            thinking_auto_budget_switch.value = True
-            thinking_budget_label.value = "Auto"
-            update_thinking_for_model._pro_initialized = True
-        
-        if thinking_auto_budget_switch.value:
-            thinking_budget_label.value = "Auto"
-        else:
-            thinking_budget_label.value = str(int(thinking_budget_slider.value))
+        # 現在値が範囲外の場合は調整
+        if thinking_budget_slider.value < 128:
+            thinking_budget_slider.value = 8192  # デフォルト値
             
+    elif is_flash_lite:
+        # Gemini 2.5 Flash-Lite: 512-24576トークン
+        thinking_budget_slider.min = 0  # 0で無効化可能
+        thinking_budget_slider.max = 24576
+        thinking_budget_slider.divisions = 24
+        thinking_budget_slider.tooltip = "思考バジェット (0=無効, 512-24576, -1=自動)"
+        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化（Flash-Lite）"
+        
     elif is_flash_model:
-        # Flashモデル：手動でバジェット制御可能
-        thinking_budget_slider.disabled = False
-        thinking_budget_label.disabled = False
-        thinking_auto_budget_switch.disabled = False
-        thinking_budget_slider.tooltip = "思考バジェット (0=無効, >0=有効, Flashモデルで細かい制御可能)"
-        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化を使用（Flashモデル）"
+        # Gemini 2.5 Flash: 1-24576トークン
+        thinking_budget_slider.min = 0  # 0で無効化可能
+        thinking_budget_slider.max = 24576
+        thinking_budget_slider.divisions = 24
+        thinking_budget_slider.tooltip = "思考バジェット (0=無効, 1-24576, -1=自動)"
+        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化（Flashモデル）"
         
-        if not thinking_auto_budget_switch.value:
-            thinking_budget_label.value = str(int(thinking_budget_slider.value))
     else:
-        # その他のモデル：制限付きサポート
-        thinking_budget_slider.disabled = False
-        thinking_budget_label.disabled = False
-        thinking_auto_budget_switch.disabled = False
-        thinking_budget_slider.tooltip = "思考バジェット (0=無効, >0=有効, モデルによってはサポートされない場合があります)"
-        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化を使用"
-        
-        if not thinking_auto_budget_switch.value:
-            thinking_budget_label.value = str(int(thinking_budget_slider.value))
+        # その他のモデル：デフォルト制限
+        thinking_budget_slider.min = 0
+        thinking_budget_slider.max = 8192
+        thinking_budget_slider.divisions = 8
+        thinking_budget_slider.tooltip = "思考バジェット (0=無効, モデルによってはサポートされない場合があります)"
+        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化"
+    
+    # ラベル更新
+    if thinking_auto_budget_switch.value:
+        thinking_budget_label.value = "Auto"
+    else:
+        thinking_budget_label.value = str(int(thinking_budget_slider.value))
     
     # UIを更新
     try:
