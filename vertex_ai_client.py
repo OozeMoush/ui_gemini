@@ -358,75 +358,44 @@ def generate_gemini_response(
                 contents=gen_ai_contents
             )
 
-        # 最終レスポンスを取得（ストリーミングではなく）
-        final_response = None
+        # 実際のストリーミング処理
         thinking_token_count = 0
         
         try:
-            # ストリーミングではなく通常のレスポンスを取得してメタデータにアクセス
-            if generation_config_obj:
-                final_response = client.models.generate_content(
-                    model=model_name,
-                    contents=gen_ai_contents,
-                    config=generation_config_obj
-                )
-            else:
-                final_response = client.models.generate_content(
-                    model=model_name,
-                    contents=gen_ai_contents
-                )
+            logging.info("Starting real-time streaming...")
             
-            # レスポンステキストを取得
-            if hasattr(final_response, 'text'):
-                full_response_text = final_response.text
-            
-            # 思考トークン数を取得
-            if hasattr(final_response, 'usage_metadata') and hasattr(final_response.usage_metadata, 'thoughts_token_count'):
-                thinking_token_count = final_response.usage_metadata.thoughts_token_count
-                logging.info(f"Thinking tokens used: {thinking_token_count}")
-            
-            # ストリーミング風に表示更新
-            stream_update_callback(full_response_text)
-            
-        except Exception as response_err:
-            logging.error(f"Error getting final response: {response_err}")
-            # フォールバック：ストリーミング処理
+            # リアルタイムストリーミング処理
             for chunk in response_stream:
                 try:
-                    # 通常のテキスト応答の処理
+                    # チャンクからテキストを抽出
+                    chunk_text = ""
                     if hasattr(chunk, 'text') and chunk.text:
                         chunk_text = chunk.text
+                        logging.info(f"Streaming chunk: {len(chunk_text)} chars, total: {len(full_response_text)} chars")
+                    
+                    if chunk_text:
                         full_response_text += chunk_text
                         
-                        # コールバックを呼び出し、キャンセルがリクエストされていればFalseが返される
+                        # リアルタイムでコールバックを呼び出し
                         continue_streaming = stream_update_callback(full_response_text)
                         if continue_streaming is False:
                             logging.info("Stream cancelled by user request")
                             error_message = "キャンセルされました"
                             break
-                            
-                    elif hasattr(chunk, 'candidates') and chunk.candidates:
-                        # 代替的な応答テキスト取得方法
-                        for candidate in chunk.candidates:
-                            if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
-                                for part in candidate.content.parts:
-                                    if hasattr(part, 'text') and part.text:
-                                        chunk_text = part.text
-                                        full_response_text += chunk_text
-                                        
-                                        # キャンセルチェック
-                                        continue_streaming = stream_update_callback(full_response_text)
-                                        if continue_streaming is False:
-                                            logging.info("Stream cancelled by user request")
-                                            error_message = "キャンセルされました"
-                                            break
-                            if error_message:  # 内側のループから抜けた場合、外側のループも抜ける
-                                break
-                        if error_message:
-                            break
-
+                    
+                    # 使用統計の取得を試行
+                    if hasattr(chunk, 'usage_metadata'):
+                        if hasattr(chunk.usage_metadata, 'thoughts_token_count'):
+                            thinking_token_count = chunk.usage_metadata.thoughts_token_count
+                            logging.info(f"Thinking tokens used: {thinking_token_count}")
+                    
                 except Exception as chunk_proc_err:
                     logging.error(f"Error processing stream chunk: {chunk_proc_err}", exc_info=True)
+                    continue
+
+        except Exception as stream_err:
+            logging.error(f"Error during streaming: {stream_err}", exc_info=True)
+            error_message = f"Streaming error: {stream_err}"
 
         # 思考テキストの抽出 - 最終レスポンスから
         if thinking_enabled and full_response_text:
@@ -442,26 +411,18 @@ def generate_gemini_response(
 
         logging.info(f"Stream finished. Response length: {len(full_response_text)}, Thinking length: {len(full_thinking_text)}")
 
-        # 出力トークン数を取得または推定
+        # 出力トークン数を推定（ストリーミングでは正確な値は取得困難）
         if full_response_text:
-            # まず正確なトークン数を試す
-            if final_response and hasattr(final_response, 'usage_metadata'):
-                usage = final_response.usage_metadata
-                if hasattr(usage, 'candidates_token_count'):
-                    output_token_count = usage.candidates_token_count
-                    logging.info(f"Accurate output tokens: {output_token_count}")
-                elif hasattr(usage, 'total_token_count') and input_token_count:
-                    # 全体から入力を引いて出力を計算
-                    output_token_count = usage.total_token_count - input_token_count
-                    logging.info(f"Calculated output tokens: {output_token_count}")
-                else:
-                    # 推定値を使用
-                    output_token_count = len(full_response_text) // 4
-                    logging.info(f"Estimated output tokens: {output_token_count}")
-            else:
-                # 推定値を使用
-                output_token_count = len(full_response_text) // 4
-                logging.info(f"Estimated output tokens: {output_token_count}")
+            # 簡単な推定：4文字=1トークン
+            estimated_output_tokens = len(full_response_text) // 4
+            
+            # 思考トークンも含める
+            if full_thinking_text:
+                estimated_thinking_tokens = len(full_thinking_text) // 4
+                estimated_output_tokens += estimated_thinking_tokens
+            
+            output_token_count = estimated_output_tokens
+            logging.info(f"Estimated output tokens: {output_token_count} (including thinking)")
 
         # 最終コンテンツオブジェクト構築
         try:

@@ -370,7 +370,7 @@ def main(page: ft.Page):
         scroll_to_bottom()
 
         # ステータスバーのみ更新（ボタン状態は既に変更済み）
-        status_bar.value = "Processing..."
+        status_bar.value = "● Streaming response..."
         try:
             status_bar.update()
         except Exception as status_update_err:
@@ -382,19 +382,30 @@ def main(page: ft.Page):
         chat_history_display.controls.append(response_row)
         scroll_to_bottom(); page.update()
 
-        last_stream_update_time = time.time(); stream_update_interval = 0.05
+        last_stream_update_time = time.time(); stream_update_interval = 0.05  # 50msに調整してよりリアルタイム
+        word_buffer = []  # 単語バッファ
+        
         def stream_callback(accumulated_text: str):
-            nonlocal last_stream_update_time
+            nonlocal last_stream_update_time, word_buffer
             # キャンセルがリクエストされた場合は更新をスキップ
             if ui_components.cancel_requested:
                 return False  # キャンセル信号を返す
             
-            gemini_response_md.value = f"**Gemini:**\n{accumulated_text}▌"
+            # ストリーミング表示の改善：カーソル付きで表示
             current_time = time.time()
+            
+            # より滑らかなストリーミング表示
             if current_time - last_stream_update_time >= stream_update_interval:
+                # blockquoteフォーマットを適用
+                formatted_streaming_text = format_blockquotes_for_readability(accumulated_text)
+                gemini_response_md.value = f"**Gemini:**\n{formatted_streaming_text}●"  # カーソル変更
+                
                 try:
-                    page.update(); last_stream_update_time = current_time
-                except Exception as update_err: logging.warning(f"Stream update error: {update_err}")
+                    gemini_response_md.update()
+                    scroll_to_bottom()
+                    last_stream_update_time = current_time
+                except Exception as update_err: 
+                    logging.warning(f"Stream update error: {update_err}")
             return True  # 続行信号を返す
 
         full_response_text = None
@@ -488,6 +499,7 @@ def main(page: ft.Page):
 
                 # blockquoteの見た目を改善するために前処理
                 formatted_main_text = format_blockquotes_for_readability(main_text)
+                # ストリーミング完了：カーソルを削除して最終テキストを表示
                 gemini_response_md.value = f"**Gemini:**\n{formatted_main_text}"
 
                 # Thinking パネルは表示しない
@@ -515,7 +527,7 @@ def main(page: ft.Page):
                 except Exception as history_err:
                     logging.error(f"Error finalizing history: {history_err}")
 
-                status_bar.value = "Response received."
+                status_bar.value = "✓ Response received."
             else:
                 logging.warning("Received empty response/content from API client.")
                 if response_row in chat_history_display.controls:
@@ -608,9 +620,16 @@ def main(page: ft.Page):
         last_submit_time[0] = current_time
         send_message(e)
     
+    # Ctrl+Enterでの送信処理
+    def handle_key_down(e):
+        """キーボードショートカットハンドラー"""
+        if e.key == "Enter" and e.ctrl:
+            debounced_send_message(e)
+    
     send_button.on_click = debounced_send_message
     cancel_button.on_click = cancel_send
-    user_input.on_submit = debounced_send_message
+    user_input.on_submit = None  # Enterでの送信を無効化
+    page.on_keyboard_event = handle_key_down
 
     parameter_bar = ft.Container(content=ft.Column([
         ft.Row([
