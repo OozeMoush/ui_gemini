@@ -3,6 +3,35 @@ import time
 import os
 from google import genai
 from google.genai.types import GenerateContentConfig, ThinkingConfig, HttpOptions
+
+# リトライ設定
+MAX_RETRIES = 3  # 最大リトライ回数
+INITIAL_RETRY_DELAY = 1.0  # 初回リトライ待機時間（秒）
+MAX_RETRY_DELAY = 10.0  # 最大リトライ待機時間（秒）
+
+def is_retryable_error(error: Exception) -> bool:
+    """リトライ可能なエラーかどうかを判定"""
+    error_str = str(error).lower()
+    error_type = type(error).__name__
+    
+    # HTTPエラーコードのチェック
+    retryable_codes = ['443', '429', '503', '500', '502', '504']
+    for code in retryable_codes:
+        if code in error_str:
+            return True
+    
+    # ネットワークエラーのチェック
+    network_errors = ['timeout', 'connection', 'network', 'unavailable', 'refused', 'reset']
+    for err_keyword in network_errors:
+        if err_keyword in error_str.lower():
+            return True
+    
+    # 特定の例外タイプのチェック
+    retryable_exceptions = ['TimeoutError', 'ConnectionError', 'OSError', 'HTTPError']
+    if error_type in retryable_exceptions:
+        return True
+    
+    return False
 # Content, Partクラスをここで定義
 class Part:
     """メッセージの一部を表すクラス"""
@@ -345,57 +374,100 @@ def generate_gemini_response(
 
         generation_config_obj = GenerateContentConfig(**config_kwargs) if config_kwargs else None
 
-        # ストリーミング生成
-        if generation_config_obj:
-            response_stream = client.models.generate_content_stream(
-                model=model_name,
-                contents=gen_ai_contents,
-                config=generation_config_obj
-            )
-        else:
-            response_stream = client.models.generate_content_stream(
-                model=model_name,
-                contents=gen_ai_contents
-            )
-
-        # 実際のストリーミング処理
+        # リトライループでストリーミング生成を実行
         thinking_token_count = 0
+        retry_count = 0
+        last_error = None
         
-        try:
-            logging.info("Starting real-time streaming...")
-            
-            # リアルタイムストリーミング処理
-            for chunk in response_stream:
-                try:
-                    # チャンクからテキストを抽出
-                    chunk_text = ""
-                    if hasattr(chunk, 'text') and chunk.text:
-                        chunk_text = chunk.text
-                        logging.info(f"Streaming chunk: {len(chunk_text)} chars, total: {len(full_response_text)} chars")
-                    
-                    if chunk_text:
-                        full_response_text += chunk_text
-                        
-                        # リアルタイムでコールバックを呼び出し
-                        continue_streaming = stream_update_callback(full_response_text)
-                        if continue_streaming is False:
-                            logging.info("Stream cancelled by user request")
-                            error_message = "キャンセルされました"
-                            break
-                    
-                    # 使用統計の取得を試行
-                    if hasattr(chunk, 'usage_metadata'):
-                        if hasattr(chunk.usage_metadata, 'thoughts_token_count'):
-                            thinking_token_count = chunk.usage_metadata.thoughts_token_count
-                            logging.info(f"Thinking tokens used: {thinking_token_count}")
-                    
-                except Exception as chunk_proc_err:
-                    logging.error(f"Error processing stream chunk: {chunk_proc_err}", exc_info=True)
-                    continue
+        while retry_count <= MAX_RETRIES:
+            try:
+                # ストリーミング生成
+                if generation_config_obj:
+                    response_stream = client.models.generate_content_stream(
+                        model=model_name,
+                        contents=gen_ai_contents,
+                        config=generation_config_obj
+                    )
+                else:
+                    response_stream = client.models.generate_content_stream(
+                        model=model_name,
+                        contents=gen_ai_contents
+                    )
 
-        except Exception as stream_err:
-            logging.error(f"Error during streaming: {stream_err}", exc_info=True)
-            error_message = f"Streaming error: {stream_err}"
+                # 実際のストリーミング処理
+                logging.info(f"Starting real-time streaming... (attempt {retry_count + 1}/{MAX_RETRIES + 1})")
+                
+                # リアルタイムストリーミング処理
+                stream_completed = False
+                for chunk in response_stream:
+                    try:
+                        # チャンクからテキストを抽出
+                        chunk_text = ""
+                        if hasattr(chunk, 'text') and chunk.text:
+                            chunk_text = chunk.text
+                            logging.info(f"Streaming chunk: {len(chunk_text)} chars, total: {len(full_response_text)} chars")
+                        
+                        if chunk_text:
+                            full_response_text += chunk_text
+                            
+                            # リアルタイムでコールバックを呼び出し
+                            continue_streaming = stream_update_callback(full_response_text)
+                            if continue_streaming is False:
+                                logging.info("Stream cancelled by user request")
+                                error_message = "キャンセルされました"
+                                break
+                        
+                        # 使用統計の取得を試行
+                        if hasattr(chunk, 'usage_metadata'):
+                            if hasattr(chunk.usage_metadata, 'thoughts_token_count'):
+                                thinking_token_count = chunk.usage_metadata.thoughts_token_count
+                                logging.info(f"Thinking tokens used: {thinking_token_count}")
+                        
+                    except Exception as chunk_proc_err:
+                        logging.error(f"Error processing stream chunk: {chunk_proc_err}", exc_info=True)
+                        continue
+                
+                # キャンセルされた場合はループを抜ける
+                if error_message == "キャンセルされました":
+                    break
+                
+                # ストリーミングが正常に完了した場合はループを抜ける
+                stream_completed = True
+                break
+                
+            except Exception as stream_err:
+                last_error = stream_err
+                error_str = str(stream_err)
+                
+                # キャンセルされた場合はリトライしない
+                if "キャンセル" in error_str or "cancel" in error_str.lower():
+                    error_message = "キャンセルされました"
+                    break
+                
+                # リトライ可能なエラーかチェック
+                if is_retryable_error(stream_err) and retry_count < MAX_RETRIES:
+                    retry_count += 1
+                    # 指数バックオフで待機時間を計算
+                    delay = min(INITIAL_RETRY_DELAY * (2 ** (retry_count - 1)), MAX_RETRY_DELAY)
+                    logging.warning(f"Retryable error occurred (attempt {retry_count}/{MAX_RETRIES}): {error_str}")
+                    logging.info(f"Retrying in {delay:.1f} seconds...")
+                    
+                    # リトライ前に少し待機（キャンセルチェックも行う）
+                    for _ in range(int(delay * 10)):  # 0.1秒ごとにチェック
+                        time.sleep(0.1)
+                        # キャンセルチェック（stream_update_callbackがFalseを返すかチェック）
+                        # 注: この時点ではコールバックが利用できないため、スキップ
+                    
+                    # リトライ可能なエラーの場合、エラーメッセージをクリア
+                    error_message = None
+                    continue
+                else:
+                    # リトライ不可能なエラー、または最大リトライ回数に達した場合
+                    logging.error(f"Error during streaming (non-retryable or max retries reached): {stream_err}", exc_info=True)
+                    error_message = f"Streaming error: {stream_err}"
+                    if retry_count >= MAX_RETRIES:
+                        error_message += f" (リトライ {MAX_RETRIES}回試行しましたが失敗しました)"
+                    break
 
         # 思考テキストの抽出 - 最終レスポンスから
         if thinking_enabled and full_response_text:

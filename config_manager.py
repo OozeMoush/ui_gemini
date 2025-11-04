@@ -48,3 +48,27 @@ config = load_config()
 def get_config():
     """Returns the loaded configuration dictionary."""
     return config
+
+def update_root_directory(new_path: str) -> bool:
+    """プロジェクトのルートディレクトリパスを更新"""
+    try:
+        # 現在の設定を読み込み
+        with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+            config_data = json.load(f)
+        
+        # パスを更新
+        config_data["root_directory"] = new_path
+        
+        # 設定を保存
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(config_data, f, ensure_ascii=False, indent=2)
+        
+        # グローバル設定も更新
+        global config
+        config["root_directory"] = new_path
+        
+        logging.info(f"プロジェクトパスを更新しました: {new_path}")
+        return True
+    except Exception as e:
+        logging.error(f"プロジェクトパス更新に失敗: {e}", exc_info=True)
+        return False

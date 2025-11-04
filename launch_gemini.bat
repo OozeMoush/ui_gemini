@@ -1,12 +1,7 @@
 @echo off
 
-REM 仮想環境をアクティベート
-call .venv\Scripts\activate.bat
-
-REM Pythonスクリプトを実行
-python main.py
-
-REM 仮想環境をディアクティベート（任意）
-REM call deactivate
+REM uvを使用してアプリを起動
+REM 依存関係がインストールされていない場合は自動的にインストールされます
+uv run python main.py
 
 pause

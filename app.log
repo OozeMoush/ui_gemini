@@ -1321,3 +1321,60 @@ print("Hello World")
 2025-08-24 16:13:08,526 - DEBUG - [page.py:856] page.on_event_async: page change [{"i":"page","windowwidth":"1280.0","windowheight":"720.0","windowtop":"10.0","windowleft":"10.0","windowminimized":"false","windowmaximized":"false","windowfocused":"false","windowfullscreen":"false"}]
 2025-08-24 16:13:08,527 - DEBUG - [flet_socket_server.py:121] _on_message: {"action":"pageEventFromWeb","payload":{"eventTarget":"page","eventName":"window_event","eventData":"blur"}}
 2025-08-24 16:13:08,528 - DEBUG - [page.py:856] page.on_event_async: page window_event blur
+2025-11-05 00:42:33,311 - INFO - [logger_setup.py:35] --- Logging Initialized (File: app.log, Console Level: INFO, MaxSize: 5.0MB, Backups: 3) ---
+2025-11-05 00:42:33,313 - INFO - [config_manager.py:26] Configuration loaded from config.json
+2025-11-05 00:42:36,653 - WARNING - [main.py:102] Project ID or location not configured properly in config.json.
+2025-11-05 00:42:36,653 - INFO - [main.py:1120] Starting Flet app...
+2025-11-05 00:42:36,654 - DEBUG - [selector_events.py:54] Using selector: EpollSelector
+2025-11-05 00:43:24,646 - INFO - [logger_setup.py:35] --- Logging Initialized (File: app.log, Console Level: INFO, MaxSize: 5.0MB, Backups: 3) ---
+2025-11-05 00:43:24,646 - INFO - [config_manager.py:26] Configuration loaded from config.json
+2025-11-05 00:43:25,222 - WARNING - [main.py:102] Project ID or location not configured properly in config.json.
+2025-11-05 00:43:25,222 - INFO - [main.py:1120] Starting Flet app...
+2025-11-05 00:43:25,222 - DEBUG - [selector_events.py:54] Using selector: EpollSelector
+2025-11-05 00:43:25,244 - INFO - [__init__.py:62] Starting Flet View app...
+2025-11-05 00:43:25,245 - INFO - [__init__.py:181] Looking for Flet bundle archive at: /home/issei/workspace/ui_gemini/.venv/lib/python3.10/site-packages/flet_desktop/app/flet-linux-amd64.tar.gz
+2025-11-05 00:43:25,245 - INFO - [__init__.py:185] Extracting Flet from archive to /home/issei/.flet/bin/flet-0.28.3
+2025-11-05 00:43:27,713 - INFO - [main.py:126] Main UI function started.
+2025-11-05 00:43:27,716 - WARNING - [main.py:1109] Set 'root_directory' in config.json
+2025-11-05 00:43:27,717 - INFO - [ui_components.py:107] Updating dropdown options: ['default'], current: default
+2025-11-05 00:43:27,717 - INFO - [ui_components.py:110] Dropdown value set to: default
+2025-11-05 00:43:27,719 - INFO - [main.py:737] セッション一覧を更新: ['default'], 現在のセッション: default
+2025-11-05 00:43:27,719 - INFO - [conversation_manager.py:98] 会話履歴を読み込みました: conversations/default.json (12 メッセージ)
+2025-11-05 00:43:27,720 - INFO - [main.py:163] 前回の会話を復元: 12 メッセージ
+2025-11-05 00:44:04,623 - DEBUG - [__init__.py:53] Flet View process 2050199
+2025-11-05 00:44:04,623 - INFO - [main.py:1122] --- Application Finished ---
+2025-11-05 00:46:59,487 - INFO - [logger_setup.py:35] --- Logging Initialized (File: app.log, Console Level: INFO, MaxSize: 5.0MB, Backups: 3) ---
+2025-11-05 00:46:59,488 - INFO - [config_manager.py:26] Configuration loaded from config.json
+2025-11-05 00:47:00,013 - WARNING - [main.py:102] Project ID or location not configured properly in config.json.
+2025-11-05 00:47:00,014 - INFO - [main.py:1200] Starting Flet app...
+2025-11-05 00:47:00,014 - DEBUG - [selector_events.py:54] Using selector: EpollSelector
+2025-11-05 00:47:00,018 - INFO - [__init__.py:62] Starting Flet View app...
+2025-11-05 00:47:00,018 - INFO - [__init__.py:190] Flet View found in: /home/issei/.flet/bin/flet-0.28.3
+2025-11-05 00:47:01,025 - WARNING - [main.py:158] 日本語フォントが見つかりませんでした。デフォルトフォントを使用します。
+2025-11-05 00:47:01,026 - INFO - [main.py:171] Main UI function started.
+2025-11-05 00:47:01,031 - WARNING - [main.py:1189] Set 'root_directory' in config.json
+2025-11-05 00:47:01,032 - INFO - [ui_components.py:107] Updating dropdown options: ['default'], current: default
+2025-11-05 00:47:01,032 - INFO - [ui_components.py:110] Dropdown value set to: default
+2025-11-05 00:47:01,034 - INFO - [main.py:806] セッション一覧を更新: ['default'], 現在のセッション: default
+2025-11-05 00:47:01,035 - INFO - [conversation_manager.py:98] 会話履歴を読み込みました: conversations/default.json (12 メッセージ)
+2025-11-05 00:47:01,035 - INFO - [main.py:214] 前回の会話を復元: 12 メッセージ
+2025-11-05 00:47:09,913 - DEBUG - [__init__.py:53] Flet View process 2055585
+2025-11-05 00:47:09,914 - INFO - [main.py:1202] --- Application Finished ---
+2025-11-05 00:51:16,542 - INFO - [logger_setup.py:35] --- Logging Initialized (File: app.log, Console Level: INFO, MaxSize: 5.0MB, Backups: 3) ---
+2025-11-05 00:51:16,544 - INFO - [config_manager.py:26] Configuration loaded from config.json
+2025-11-05 00:51:17,176 - WARNING - [main.py:102] Project ID or location not configured properly in config.json.
+2025-11-05 00:51:17,176 - INFO - [main.py:1225] Starting Flet app...
+2025-11-05 00:51:17,177 - DEBUG - [selector_events.py:54] Using selector: EpollSelector
+2025-11-05 00:51:17,182 - INFO - [__init__.py:62] Starting Flet View app...
+2025-11-05 00:51:17,182 - INFO - [__init__.py:190] Flet View found in: /home/issei/.flet/bin/flet-0.28.3
+2025-11-05 00:51:18,267 - INFO - [main.py:175] 日本語フォントを設定しました: /mnt/c/Windows/Fonts/meiryo.ttc (フォント名: Meiryo)
+2025-11-05 00:51:18,267 - INFO - [main.py:196] Main UI function started.
+2025-11-05 00:51:18,272 - WARNING - [main.py:1214] Set 'root_directory' in config.json
+2025-11-05 00:51:18,272 - INFO - [ui_components.py:107] Updating dropdown options: ['default'], current: default
+2025-11-05 00:51:18,273 - INFO - [ui_components.py:110] Dropdown value set to: default
+2025-11-05 00:51:18,275 - INFO - [main.py:831] セッション一覧を更新: ['default'], 現在のセッション: default
+2025-11-05 00:51:18,276 - INFO - [conversation_manager.py:98] 会話履歴を読み込みました: conversations/default.json (12 メッセージ)
+2025-11-05 00:51:18,277 - INFO - [main.py:239] 前回の会話を復元: 12 メッセージ
+2025-11-05 00:52:11,616 - WARNING - [main.py:352] Send: Gen AI not initialized.
+2025-11-05 00:52:17,739 - DEBUG - [__init__.py:53] Flet View process 2062063
+2025-11-05 00:52:17,740 - INFO - [main.py:1227] --- Application Finished ---

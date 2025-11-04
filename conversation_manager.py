@@ -12,6 +12,8 @@ class ConversationManager:
     def __init__(self, conversations_dir: str = "conversations"):
         self.conversations_dir = Path(conversations_dir)
         self.conversations_dir.mkdir(exist_ok=True)
+        self.archived_dir = self.conversations_dir / "archived"
+        self.archived_dir.mkdir(exist_ok=True)
         self.current_session = "default"
         
     def _get_session_file(self, session_name: str = None) -> Path:
@@ -101,26 +103,35 @@ class ConversationManager:
             return []
     
     def get_session_list(self) -> List[str]:
-        """利用可能なセッション一覧を取得"""
+        """利用可能なセッション一覧を取得（アーカイブフォルダは除外）"""
         try:
             session_files = list(self.conversations_dir.glob("*.json"))
-            session_names = [f.stem for f in session_files]
+            # アーカイブフォルダ内のファイルは除外
+            session_names = [f.stem for f in session_files if f.parent != self.archived_dir]
             return sorted(session_names)
         except Exception as e:
             logging.error(f"セッション一覧の取得に失敗: {e}")
             return []
     
     def delete_session(self, session_name: str) -> bool:
-        """セッションを削除"""
+        """セッションをアーカイブフォルダに移動（削除ではなくアーカイブ化）"""
         try:
             session_file = self._get_session_file(session_name)
             if session_file.exists():
-                session_file.unlink()
-                logging.info(f"セッションを削除しました: {session_name}")
+                # アーカイブフォルダに移動
+                archived_file = self.archived_dir / session_file.name
+                # 既にアーカイブに同名ファイルがある場合は、タイムスタンプを追加
+                if archived_file.exists():
+                    from datetime import datetime
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    archived_file = self.archived_dir / f"{session_file.stem}_{timestamp}.json"
+                
+                session_file.rename(archived_file)
+                logging.info(f"セッションをアーカイブしました: {session_name} -> {archived_file}")
                 return True
             return False
         except Exception as e:
-            logging.error(f"セッション削除に失敗: {e}")
+            logging.error(f"セッションアーカイブに失敗: {e}")
             return False
     
     def get_session_info(self, session_name: str = None) -> Optional[Dict[str, Any]]:

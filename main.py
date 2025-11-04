@@ -113,6 +113,75 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK # Keep Dark theme
     
     # シンプルで読みやすいダークテーマ
+    # 日本語フォントを設定（システムフォントを自動検出）
+    import platform
+    system = platform.system()
+    
+    # システムに応じた日本語フォントを設定
+    if system == "Windows":
+        # Windows: メイリオまたはMS ゴシック
+        try:
+            page.fonts = {
+                "Meiryo": "C:/Windows/Fonts/meiryo.ttc",
+            }
+            default_font_family = "Meiryo"
+        except:
+            default_font_family = None
+    elif system == "Darwin":  # macOS
+        # macOS: ヒラギノ
+        try:
+            page.fonts = {
+                "Hiragino": "/System/Library/Fonts/Hiragino Sans GB.ttc",
+            }
+            default_font_family = "Hiragino"
+        except:
+            default_font_family = None
+    else:  # Linux (WSLを含む)
+        # Linux/WSL: 複数のパスを試行（WSLの場合はWindowsホストのフォントも確認）
+        linux_font_paths = [
+            # WSL経由でWindowsフォントにアクセス
+            "/mnt/c/Windows/Fonts/meiryo.ttc",
+            "/mnt/c/Windows/Fonts/msgothic.ttc",
+            "/mnt/c/Windows/Fonts/msmincho.ttc",
+            "/mnt/c/Windows/Fonts/NotoSansCJK-Regular.ttc",
+            # Linux標準パス
+            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+            "/usr/share/fonts/NotoSansCJK-Regular.ttc",
+            # その他の一般的なパス
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # フォールバック
+        ]
+        default_font_family = None
+        font_name = None
+        
+        for font_path in linux_font_paths:
+            font_file = pathlib.Path(font_path)
+            if font_file.exists():
+                try:
+                    # フォント名を決定
+                    if "meiryo" in font_path.lower():
+                        font_name = "Meiryo"
+                    elif "noto" in font_path.lower():
+                        font_name = "NotoSansJP"
+                    elif "msgothic" in font_path.lower():
+                        font_name = "MSGothic"
+                    elif "msmincho" in font_path.lower():
+                        font_name = "MSMincho"
+                    else:
+                        font_name = "DejaVuSans"
+                    
+                    page.fonts = {font_name: str(font_file)}
+                    default_font_family = font_name
+                    logging.info(f"日本語フォントを設定しました: {font_path} (フォント名: {font_name})")
+                    break
+                except Exception as font_err:
+                    logging.warning(f"フォント読み込みエラー ({font_path}): {font_err}")
+                    continue
+        
+        if default_font_family is None:
+            logging.warning("日本語フォントが見つかりませんでした。デフォルトフォントを使用します。")
+            logging.warning("日本語フォントをインストールするには: sudo apt-get install fonts-noto-cjk")
+    
     page.theme = ft.Theme(
         color_scheme=ft.ColorScheme(
             # より読みやすい配色に調整
@@ -120,7 +189,8 @@ def main(page: ft.Page):
             on_surface_variant=ft.Colors.GREY_200,  # 引用部分のテキスト
             primary=ft.Colors.BLUE_400,  # アクセント色
             secondary=ft.Colors.CYAN_400,  # セカンダリ色
-        )
+        ),
+        font_family=default_font_family if default_font_family else None,
     )
     
     logging.info("Main UI function started.")
@@ -156,7 +226,13 @@ def main(page: ft.Page):
                     elif content.role == "model":
                         model_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
                         formatted_model_text = format_blockquotes_for_readability(model_text)
-                        response_md = ft.Markdown(f"**Gemini:**\n{formatted_model_text}", selectable=True, code_theme="dracula", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB, auto_follow_links=True)
+                        response_md = ft.Markdown(
+                            f"**Gemini:**\n{formatted_model_text}", 
+                            selectable=True, 
+                            code_theme="dracula", 
+                            extension_set=ft.MarkdownExtensionSet.COMMON_MARK,  # 軽量化
+                            auto_follow_links=True
+                        )
                         chat_history_display.controls.append(response_md)
                 
                 status_bar.value = f"前回の会話を復元しました ({len(loaded_history)} メッセージ)"
@@ -212,7 +288,15 @@ def main(page: ft.Page):
                  except Exception as cb_err: checkbox_update_errors += 1
              if checkbox_update_errors > 0: logging.warning(f"{checkbox_update_errors} checkboxes failed to update individually on reset.")
 
-        system_prompt_field.value = config.get("default_system_prompt", "")
+        # システムプロンプトテンプレートが選択されている場合は、テンプレート値を保持
+        selected_template = system_prompt_template_dropdown.value
+        if selected_template and selected_template != "なし" and selected_template in ui_components.system_prompt_templates:
+            # 選択されているテンプレートの値を保持
+            system_prompt_field.value = ui_components.system_prompt_templates[selected_template]
+        else:
+            # テンプレートが選択されていない場合はデフォルト値にリセット
+            system_prompt_field.value = config.get("default_system_prompt", "")
+        
         status_bar.value = "Conversation reset."
         
         # セッション情報を更新
@@ -337,17 +421,8 @@ def main(page: ft.Page):
             logging.warning(f"Pre-calculation of input tokens failed: {token_calc_err}")
             pre_input_tokens = None
 
-        # 入力トークン表示（事前計算値）
-        input_info_text = ""
-        if pre_input_tokens is not None:
-            input_info_text = f"Input: {pre_input_tokens} tokens (計算中...)"
-        else:
-            input_info_text = "Input tokens: 計算中..."
-
-        input_tokens_display = ft.Text(input_info_text, size=10, italic=True, color=ft.Colors.ON_SURFACE_VARIANT, selectable=True)
         user_message_column = ft.Column([
-            ft.Text(f"You: {prompt_text}", selectable=True),
-            input_tokens_display
+            ft.Text(f"You: {prompt_text}", selectable=True)
         ], spacing=2)
 
         chat_history_display.controls.append(user_message_column)
@@ -376,29 +451,44 @@ def main(page: ft.Page):
         except Exception as status_update_err:
             logging.warning(f"Status update error: {status_update_err}")
 
-        gemini_response_md = ft.Markdown(f"**Gemini:**\n▌", selectable=True, code_theme="dracula", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB, auto_follow_links=True, on_tap_link=lambda e: page.launch_url(e.data))
+        # Markdownレンダリングを軽量化（extension_setを最小限に）
+        gemini_response_md = ft.Markdown(
+            f"**Gemini:**\n▌", 
+            selectable=True, 
+            code_theme="dracula", 
+            extension_set=ft.MarkdownExtensionSet.COMMON_MARK,  # GITHUB_WEBより軽量
+            auto_follow_links=True, 
+            on_tap_link=lambda e: page.launch_url(e.data)
+        )
         gemini_response_container = ft.Container(content=gemini_response_md, padding=ft.padding.only(bottom=10), expand=True)
         response_row = ft.Row([gemini_response_container], vertical_alignment=ft.CrossAxisAlignment.START)
         chat_history_display.controls.append(response_row)
         scroll_to_bottom(); page.update()
 
-        last_stream_update_time = time.time(); stream_update_interval = 0.05  # 50msに調整してよりリアルタイム
-        word_buffer = []  # 単語バッファ
+        last_stream_update_time = time.time(); stream_update_interval = 0.2  # 200msに調整してパフォーマンスを向上
         
         def stream_callback(accumulated_text: str):
-            nonlocal last_stream_update_time, word_buffer
+            nonlocal last_stream_update_time
             # キャンセルがリクエストされた場合は更新をスキップ
             if ui_components.cancel_requested:
                 return False  # キャンセル信号を返す
             
-            # ストリーミング表示の改善：カーソル付きで表示
+            # ストリーミング表示の改善：更新頻度を制限してパフォーマンスを向上
             current_time = time.time()
             
-            # より滑らかなストリーミング表示
+            # 更新間隔をチェック（200ms間隔）
             if current_time - last_stream_update_time >= stream_update_interval:
-                # blockquoteフォーマットを適用
-                formatted_streaming_text = format_blockquotes_for_readability(accumulated_text)
-                gemini_response_md.value = f"**Gemini:**\n{formatted_streaming_text}●"  # カーソル変更
+                # blockquoteフォーマットは軽量化（必要最小限のみ）
+                # 長いテキストの場合は末尾のみフォーマット
+                if len(accumulated_text) > 1000:
+                    # 末尾500文字のみフォーマット（パフォーマンス向上）
+                    preview_text = accumulated_text[-500:]
+                    formatted_preview = format_blockquotes_for_readability(preview_text)
+                    display_text = accumulated_text[:-500] + formatted_preview
+                else:
+                    display_text = format_blockquotes_for_readability(accumulated_text)
+                
+                gemini_response_md.value = f"**Gemini:**\n{display_text}●"  # カーソル変更
                 
                 try:
                     gemini_response_md.update()
@@ -416,6 +506,7 @@ def main(page: ft.Page):
         input_cost = None
         output_cost = None
         total_cost = None
+        was_cancelled = False  # キャンセル状態を追跡
 
         try:
             selected_model_name = model_dropdown.value; selected_temperature = temperature_slider.value
@@ -449,40 +540,39 @@ def main(page: ft.Page):
                 thinking_auto_budget=thinking_auto  # UI設定を使用
             )
 
-            # 入力トークン表示を更新（正確な値）
-            final_input_info_text = ""
+            # 入力・出力情報を統合して表示
+            info_parts = []
+            
+            # 入力情報
             if input_tokens is not None:
-                final_input_info_text = f"Input: {input_tokens} tokens"
+                input_info = f"Input: {input_tokens} tokens"
                 if input_cost is not None:
-                    final_input_info_text += f" | Cost: ${input_cost:.6f}"
+                    input_info += f" | ${input_cost:.6f}"
+                info_parts.append(input_info)
             else:
-                final_input_info_text = "Input tokens: 取得できませんでした"
-
-            input_tokens_display.value = final_input_info_text
-            try:
-                input_tokens_display.update()
-            except Exception as input_token_update_err:
-                logging.warning(f"Could not update input token/cost display: {input_token_update_err}")
-
-            output_info_text = ""
-            cost_breakdown_available = input_cost is not None and output_cost is not None and total_cost is not None
-
+                info_parts.append("Input: 取得できませんでした")
+            
+            # 出力情報
             if output_tokens is not None:
-                output_info_text += f"Output: {output_tokens} tokens"
+                output_info = f"Output: {output_tokens} tokens"
                 if thinking_tokens > 0:
-                    output_info_text += f" (+{thinking_tokens} thinking)"
+                    output_info += f" (+{thinking_tokens} thinking)"
                 if output_cost is not None:
-                     output_info_text += f" | Cost: ${output_cost:.6f}"
-
+                    output_info += f" | ${output_cost:.6f}"
+                info_parts.append(output_info)
+            
+            # 合計コスト
+            cost_breakdown_available = input_cost is not None and output_cost is not None and total_cost is not None
             if cost_breakdown_available:
-                 separator = " | " if output_info_text else ""
-                 output_info_text += f"{separator}Total: ${total_cost:.6f}"
+                info_parts.append(f"Total: ${total_cost:.6f}")
             elif total_cost is not None:
-                 separator = " | " if output_info_text else ""
-                 output_info_text += f"{separator}Total (Input Only): ${total_cost:.6f}"
-            elif input_tokens is not None:
-                 separator = " | " if output_info_text else ""
-                 output_info_text += f"{separator}Cost calculation failed"
+                info_parts.append(f"Total: ${total_cost:.6f}")
+            
+            output_info_text = " | ".join(info_parts)
+
+            # キャンセルされたかチェック
+            if api_error_message == "キャンセルされました":
+                was_cancelled = True
 
             if api_error_message:
                 logging.error(f"API Client Error: {api_error_message}")
@@ -500,7 +590,9 @@ def main(page: ft.Page):
                 # blockquoteの見た目を改善するために前処理
                 formatted_main_text = format_blockquotes_for_readability(main_text)
                 # ストリーミング完了：カーソルを削除して最終テキストを表示
+                # Markdownレンダリングを最適化（一度だけ実行）
                 gemini_response_md.value = f"**Gemini:**\n{formatted_main_text}"
+                gemini_response_md.update()
 
                 # Thinking パネルは表示しない
 
@@ -521,11 +613,13 @@ def main(page: ft.Page):
                     logging.warning("Could not find response_row to insert controls below, appending instead.")
                     chat_history_display.controls.append(controls_below_response)
 
-                try:
-                    conversation_history.append(current_content)
-                    conversation_history.append(final_model_content)
-                except Exception as history_err:
-                    logging.error(f"Error finalizing history: {history_err}")
+                # キャンセルされていない場合のみ会話履歴に追加
+                if not was_cancelled:
+                    try:
+                        conversation_history.append(current_content)
+                        conversation_history.append(final_model_content)
+                    except Exception as history_err:
+                        logging.error(f"Error finalizing history: {history_err}")
 
                 status_bar.value = "✓ Response received."
             else:
@@ -546,25 +640,13 @@ def main(page: ft.Page):
             logging.error(error_message, exc_info=True)
             if 'response_row' in locals() and response_row in chat_history_display.controls:
                  chat_history_display.controls.remove(response_row)
-            if 'input_tokens_display' in locals():
-                input_info_text_exc = ""
-                if input_tokens is not None:
-                    input_info_text_exc = f"Input: {input_tokens} tokens"
-                    if input_cost is not None:
-                        input_info_text_exc += f" | Cost: ${input_cost:.6f}"
-                else:
-                    input_info_text_exc = "Input tokens: エラーが発生しました"
-                input_tokens_display.value = input_info_text_exc
-                try:
-                    input_tokens_display.update()
-                except: pass
 
             chat_history_display.controls.append(ft.Text(f"App Error: {error_message}", color=ft.Colors.RED))
             status_bar.value = "Application Error occurred."
             scroll_to_bottom()
         finally:
             # キャンセル状態を確認（リセット前に）
-            was_cancelled = ui_components.cancel_requested
+            was_cancelled = ui_components.cancel_requested or was_cancelled
             
             # 送信状態をリセットしてボタンを元に戻す
             ui_components.is_sending = False
@@ -587,8 +669,11 @@ def main(page: ft.Page):
                 # 未完了の応答があれば削除
                 if 'response_row' in locals() and response_row in chat_history_display.controls:
                     chat_history_display.controls.remove(response_row)
+                # キャンセルされたユーザーメッセージも削除（会話履歴に含めないため）
+                if 'user_message_column' in locals() and user_message_column in chat_history_display.controls:
+                    chat_history_display.controls.remove(user_message_column)
                 scroll_to_bottom()
-                logging.info("送信処理がキャンセルされました")
+                logging.info("送信処理がキャンセルされました。会話履歴は保持されます。")
             elif not api_error_message:  # エラーがない場合のみ保存
                 # メッセージ送信後に自動保存
                 save_current_conversation()
@@ -655,6 +740,45 @@ def main(page: ft.Page):
         ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=5, expand=True)
     ]), padding=ft.padding.symmetric(horizontal=10, vertical=5), border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)))
 
+    # 選択ファイル表示用の変数（後で定義されるコンポーネントへの参照を保持）
+    selected_files_text_ref = [None]
+    selected_files_list_ref = [None]
+    
+    def update_selected_files_display():
+        """選択中のファイル一覧を更新"""
+        if selected_files_text_ref[0] is None or selected_files_list_ref[0] is None:
+            return
+        
+        selected_files = []
+        for checkbox, file_path_str in ui_components.file_checkboxes.items():
+            if checkbox.value:
+                file_path = pathlib.Path(file_path_str)
+                selected_files.append(file_path.name)
+        
+        # 表示を更新
+        if selected_files:
+            selected_files_text_ref[0].value = f"選択中ファイル ({len(selected_files)}):"
+            selected_files_list_ref[0].controls.clear()
+            for file_name in selected_files:
+                selected_files_list_ref[0].controls.append(
+                    ft.Text(f"  • {file_name}", size=10, color=ft.Colors.ON_SURFACE_VARIANT)
+                )
+        else:
+            selected_files_text_ref[0].value = "選択中ファイル: なし"
+            selected_files_list_ref[0].controls.clear()
+        
+        try:
+            selected_files_text_ref[0].update()
+            selected_files_list_ref[0].update()
+        except:
+            pass
+    
+    def create_file_checkbox_handler():
+        """チェックボックス変更時に選択ファイル表示を更新するハンドラーを作成"""
+        def handler(e):
+            update_selected_files_display()
+        return handler
+
     def refresh_file_explorer(e):
         root_dir = config.get("root_directory")
         if root_dir:
@@ -662,6 +786,13 @@ def main(page: ft.Page):
             logging.info(f"Manual refresh triggered for: {root_dir}")
             try:
                 populate_file_explorer(root_dir)
+                # 選択ファイル表示を更新
+                update_selected_files_display()
+                # 新しく作成されたチェックボックスにハンドラーを設定
+                file_checkbox_handler = create_file_checkbox_handler()
+                for checkbox in ui_components.file_checkboxes.keys():
+                    if not checkbox.on_change:
+                        checkbox.on_change = file_checkbox_handler
                 status_bar.value = f"Files reloaded from {root_dir}."; page.update()
             except Exception as populate_err:
                 status_bar.value = f"Error refreshing files: {populate_err}"
@@ -733,7 +864,13 @@ def main(page: ft.Page):
                     elif content.role == "model":
                         model_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
                         formatted_model_text = format_blockquotes_for_readability(model_text)
-                        response_md = ft.Markdown(f"**Gemini:**\n{formatted_model_text}", selectable=True, code_theme="dracula", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB, auto_follow_links=True)
+                        response_md = ft.Markdown(
+                            f"**Gemini:**\n{formatted_model_text}", 
+                            selectable=True, 
+                            code_theme="dracula", 
+                            extension_set=ft.MarkdownExtensionSet.COMMON_MARK,  # 軽量化
+                            auto_follow_links=True
+                        )
                         chat_history_display.controls.append(response_md)
             
             # セッション情報を更新
@@ -841,7 +978,12 @@ def main(page: ft.Page):
                                     )
                                 elif content.role == "model":
                                     model_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
-                                    response_md = ft.Markdown(f"**Gemini:**\n{model_text}", selectable=True, code_theme="dracula", extension_set=ft.MarkdownExtensionSet.GITHUB_WEB)
+                                    response_md = ft.Markdown(
+                                        f"**Gemini:**\n{model_text}", 
+                                        selectable=True, 
+                                        code_theme="dracula", 
+                                        extension_set=ft.MarkdownExtensionSet.COMMON_MARK  # 軽量化
+                                    )
                                     chat_history_display.controls.append(response_md)
                         
                         # UI更新
@@ -887,7 +1029,133 @@ def main(page: ft.Page):
     delete_session_button.on_click = delete_current_session
     new_session_name_field.on_submit = create_new_session
 
+    # プロジェクトパス設定用のUIコンポーネント
+    project_path_text = ft.Text(
+        config.get("root_directory", "未設定"),
+        size=11,
+        color=ft.Colors.ON_SURFACE_VARIANT,
+        selectable=True,
+        max_lines=2,
+        overflow=ft.TextOverflow.ELLIPSIS
+    )
+    
+    def update_project_path_dialog(e):
+        """プロジェクトパス変更ダイアログを表示"""
+        def save_path(e):
+            new_path = path_input.value.strip()
+            if new_path:
+                # パスが有効かチェック
+                path_obj = pathlib.Path(new_path)
+                if path_obj.exists() and path_obj.is_dir():
+                    # 設定を更新
+                    from config_manager import update_root_directory
+                    if update_root_directory(new_path):
+                        project_path_text.value = new_path
+                        project_path_text.update()
+                        
+                        # ファイルエクスプローラーを更新
+                        populate_file_explorer(new_path)
+                        # 選択ファイル表示を更新
+                        update_selected_files_display()
+                        # 新しく作成されたチェックボックスにハンドラーを設定
+                        file_checkbox_handler = create_file_checkbox_handler()
+                        for checkbox in ui_components.file_checkboxes.keys():
+                            if not checkbox.on_change:
+                                checkbox.on_change = file_checkbox_handler
+                        
+                        status_bar.value = f"プロジェクトパスを更新しました: {new_path}"
+                        page.update()
+                    else:
+                        status_bar.value = "プロジェクトパス更新に失敗しました"
+                        page.update()
+                else:
+                    status_bar.value = "無効なパスです"
+                    page.update()
+            dialog.open = False
+            page.update()
+        
+        def cancel_path(e):
+            dialog.open = False
+            page.update()
+        
+        path_input = ft.TextField(
+            label="プロジェクトパス",
+            value=config.get("root_directory", ""),
+            hint_text="プロジェクトのルートディレクトリパスを入力",
+            expand=True
+        )
+        
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Text("プロジェクトパス変更"),
+            content=ft.Column([
+                path_input
+            ], tight=True, width=400),
+            actions=[
+                ft.TextButton("キャンセル", on_click=cancel_path),
+                ft.TextButton("保存", on_click=save_path),
+            ],
+            actions_alignment=ft.MainAxisAlignment.END,
+        )
+        
+        page.overlay.append(dialog)
+        dialog.open = True
+        page.update()
+        path_input.focus()
+    
+    project_path_button = ft.IconButton(
+        icon=ft.Icons.EDIT_ROUNDED,
+        tooltip="プロジェクトパスを変更",
+        on_click=update_project_path_dialog,
+        width=30,
+        height=30
+    )
+
+    # Selected Files Section - 変数定義をColumnの外で行う
+    selected_files_text = ft.Text(
+        "選択中ファイル: なし",
+        size=11,
+        color=ft.Colors.ON_SURFACE_VARIANT,
+        italic=True
+    )
+    selected_files_text_ref[0] = selected_files_text
+    
+    selected_files_list = ft.Column(
+        [],
+        spacing=2,
+        scroll=ft.ScrollMode.ADAPTIVE,
+        height=80
+    )
+    selected_files_list_ref[0] = selected_files_list
+    
+    # 既存のチェックボックスにハンドラーを設定
+    file_checkbox_handler = create_file_checkbox_handler()
+    for checkbox in ui_components.file_checkboxes.keys():
+        # 既存のハンドラーがある場合は保持
+        if checkbox.on_change:
+            original_handler = checkbox.on_change
+            def make_wrapper(orig):
+                def wrapper(e):
+                    if orig:
+                        orig(e)
+                    update_selected_files_display()
+                return wrapper
+            checkbox.on_change = make_wrapper(original_handler)
+        else:
+            checkbox.on_change = file_checkbox_handler
+
     left_panel = ft.Container(content=ft.Column([
+        # Settings Section
+        ft.Row([
+            ft.Text("Settings", style=ft.TextThemeStyle.TITLE_MEDIUM, expand=True),
+        ]),
+        ft.Row([
+            ft.Text("プロジェクトパス:", size=11, width=80),
+            project_path_button
+        ], spacing=5),
+        project_path_text,
+        ft.Divider(),
+        
         # Session Management Section
         ft.Row([
             ft.Text("Sessions", style=ft.TextThemeStyle.TITLE_MEDIUM, expand=True),
@@ -901,6 +1169,14 @@ def main(page: ft.Page):
             new_session_name_field
         ], spacing=5),
         session_info_text,
+        ft.Divider(),
+        
+        # Selected Files Section
+        ft.Row([
+            ft.Text("Selected Files", style=ft.TextThemeStyle.TITLE_MEDIUM, expand=True),
+        ]),
+        selected_files_text,
+        selected_files_list,
         ft.Divider(),
         
         # File Explorer Section
@@ -925,7 +1201,15 @@ def main(page: ft.Page):
 
     root_dir = config.get("root_directory");
     if root_dir:
-        try: populate_file_explorer(root_dir)
+        try: 
+            populate_file_explorer(root_dir)
+            # ファイルエクスプローラー読み込み後に選択ファイル表示を更新
+            update_selected_files_display()
+            # 新しく作成されたチェックボックスにハンドラーを設定
+            file_checkbox_handler = create_file_checkbox_handler()
+            for checkbox in ui_components.file_checkboxes.keys():
+                if not checkbox.on_change:
+                    checkbox.on_change = file_checkbox_handler
         except Exception as populate_err: status_bar.value = f"Error populating files: {populate_err}"; logging.error("Populate error", exc_info=True)
     else: status_bar.value = "Set 'root_directory' in config.json"; logging.warning(status_bar.value)
     
