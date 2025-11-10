@@ -108,7 +108,7 @@ class ConversationManager:
             session_files = list(self.conversations_dir.glob("*.json"))
             # アーカイブフォルダ内のファイルは除外
             session_names = [f.stem for f in session_files if f.parent != self.archived_dir]
-            return sorted(session_names)
+            return sorted(session_names, key=str.lower)
         except Exception as e:
             logging.error(f"セッション一覧の取得に失敗: {e}")
             return []
@@ -119,12 +119,27 @@ class ConversationManager:
             session_file = self._get_session_file(session_name)
             if session_file.exists():
                 # アーカイブフォルダに移動
-                archived_file = self.archived_dir / session_file.name
-                # 既にアーカイブに同名ファイルがある場合は、タイムスタンプを追加
+                base_archived_file = self.archived_dir / session_file.name
+                archived_file = base_archived_file
+                
+                # 既にアーカイブに同名ファイルがある場合は、タイムスタンプと連番を追加
                 if archived_file.exists():
                     from datetime import datetime
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    archived_file = self.archived_dir / f"{session_file.stem}_{timestamp}.json"
+                    base_name = session_file.stem
+                    counter = 1
+                    
+                    # タイムスタンプ付きファイル名を試行
+                    archived_file = self.archived_dir / f"{base_name}_{timestamp}.json"
+                    
+                    # タイムスタンプ付きファイル名も存在する場合は連番を追加
+                    while archived_file.exists():
+                        archived_file = self.archived_dir / f"{base_name}_{timestamp}_{counter}.json"
+                        counter += 1
+                        # 無限ループを防ぐ（最大10000回まで）
+                        if counter > 10000:
+                            logging.error("アーカイブファイル名の生成に失敗: 連番が上限に達しました")
+                            return False
                 
                 session_file.rename(archived_file)
                 logging.info(f"セッションをアーカイブしました: {session_name} -> {archived_file}")
