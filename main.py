@@ -217,7 +217,12 @@ try:
         logging.info(f"Gen AI initialized for project {project_id} in {location}.")
         print(f"Gen AI initialized for project {project_id} in {location}.")
     else:
-        init_error_message = "Project ID or location not configured properly in config.json."
+        if not project_id or project_id == "YOUR_PROJECT_ID" or project_id == "":
+            init_error_message = "Vertex AI Project ID が設定されていません。config.json の 'vertex_ai_project_id' を設定してください。"
+        elif not location or location == "YOUR_LOCATION" or location == "":
+            init_error_message = "Vertex AI Location が設定されていません。config.json の 'vertex_ai_location' を設定してください。"
+        else:
+            init_error_message = "Project ID or location not configured properly in config.json."
         logging.warning(init_error_message); print(f"Warning: {init_error_message}")
 except Exception as e:
     init_error_message = f"Error initializing Gen AI: {e}"; logging.error(init_error_message, exc_info=True); print(f"Error: {init_error_message}")
@@ -463,7 +468,17 @@ def main(page: ft.Page):
         prompt_text = user_input.value.strip()
         system_prompt_text = system_prompt_field.value.strip()
         if not prompt_text: snackbar = ft.SnackBar(ft.Text("Please enter a prompt."), open=True); page.overlay.append(snackbar); page.update(); return
-        if not gen_ai_initialized: logging.warning("Send: Gen AI not initialized."); snackbar = ft.SnackBar(ft.Text(f"Gen AI not initialized. Err: {init_error_message}"), open=True); page.overlay.append(snackbar); page.update(); return
+        if not gen_ai_initialized: 
+            logging.warning("Send: Gen AI not initialized."); 
+            error_msg = init_error_message if init_error_message else "Gen AI が初期化されていません。config.json の設定を確認してください。"
+            snackbar = ft.SnackBar(
+                ft.Text(error_msg, size=12), 
+                open=True, 
+                duration=5000
+            )
+            page.overlay.append(snackbar)
+            page.update()
+            return
 
         # プロンプト準備
         current_prompt_parts = [Part.from_text(prompt_text)]; files_appended_now = False
@@ -1315,8 +1330,7 @@ def main(page: ft.Page):
     resize_divider = ft.Container(
         content=ft.VerticalDivider(width=5),
         width=5,
-        bgcolor=ft.Colors.SURFACE_VARIANT,
-        cursor=ft.MouseCursor.RESIZE_COLUMN
+        bgcolor=ft.Colors.OUTLINE_VARIANT
     )
     
     # リサイズ機能の実装
@@ -1338,7 +1352,7 @@ def main(page: ft.Page):
     
     def on_pan_end(e):
         """ドラッグ終了"""
-        resize_divider.bgcolor = ft.Colors.SURFACE_VARIANT
+        resize_divider.bgcolor = ft.Colors.OUTLINE_VARIANT
         resize_divider.update()
     
     def on_hover_resize(e):
@@ -1346,7 +1360,7 @@ def main(page: ft.Page):
         if e.data == "true":
             resize_divider.bgcolor = ft.Colors.PRIMARY
         else:
-            resize_divider.bgcolor = ft.Colors.SURFACE_VARIANT
+            resize_divider.bgcolor = ft.Colors.OUTLINE_VARIANT
         resize_divider.update()
     
     resize_divider.on_pan_start = on_pan_start
