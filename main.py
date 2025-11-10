@@ -98,15 +98,26 @@ def create_mermaid_image(mermaid_code: str) -> ft.Control:
     try:
         # mermaid.ink APIを使用してSVG画像を取得
         # base64エンコードされたマーメイドコードを送信
-        encoded_code = base64.urlsafe_b64encode(mermaid_code.encode('utf-8')).decode('utf-8')
+        # mermaid.inkは標準のbase64エンコードを使用
+        encoded_code = base64.b64encode(mermaid_code.encode('utf-8')).decode('utf-8')
+        # base64文字列の+と/をURLセーフな文字に置換（mermaid.inkの要件）
+        encoded_code = encoded_code.replace('+', '-').replace('/', '_').replace('=', '')
         mermaid_url = f"https://mermaid.ink/svg/{encoded_code}"
+        
+        logging.info(f"マーメイド図のURLを生成: {mermaid_url[:150]}... (コード長: {len(mermaid_code)})")
+        logging.debug(f"マーメイドコード: {mermaid_code[:200]}...")
         
         # 画像コンポーネントを作成
         mermaid_image = ft.Image(
             src=mermaid_url,
             fit=ft.ImageFit.CONTAIN,
             width=None,  # 幅を自動調整
-            error_content=ft.Text(f"マーメイド図の読み込みに失敗しました", color=ft.Colors.ORANGE, italic=True)
+            error_content=ft.Text(
+                f"マーメイド図の読み込みに失敗しました\nコード: {mermaid_code[:50]}...", 
+                color=ft.Colors.ORANGE, 
+                italic=True,
+                size=10
+            )
         )
         
         # コンテナで囲んで表示
