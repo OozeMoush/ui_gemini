@@ -555,6 +555,8 @@ def main(page: ft.Page):
             # 出力情報
             if output_tokens is not None:
                 output_info = f"Output: {output_tokens} tokens"
+                if thinking_tokens is None:
+                    thinking_tokens = 0
                 if thinking_tokens > 0:
                     output_info += f" (+{thinking_tokens} thinking)"
                 if output_cost is not None:
