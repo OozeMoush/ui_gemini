@@ -75,7 +75,7 @@ session_dropdown = ft.Dropdown(
 new_session_name_field = ft.TextField(
     label="新しいセッション名",
     hint_text="Session name...",
-    width=150,
+    expand=True,
     height=40
 )
 

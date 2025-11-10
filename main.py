@@ -1,9 +1,6 @@
 import flet as ft
 import time
 import pathlib
-import re
-import base64
-import urllib.parse
 # Logging and Config are now handled by importing the modules
 import logger_setup # Initializes logging
 import config_manager # Loads configuration
@@ -76,133 +73,6 @@ def format_blockquotes_for_readability(text: str) -> str:
             formatted_lines.append(line)
     
     return '\n'.join(formatted_lines)
-
-def extract_mermaid_blocks(text: str) -> list[tuple[str, str, int, int]]:
-    """
-    Markdownテキストからマーメイドブロックを抽出
-    戻り値: [(mermaid_code, placeholder, start_pos, end_pos), ...]
-    """
-    pattern = r'```mermaid\s*\n(.*?)```'
-    matches = []
-    for match in re.finditer(pattern, text, re.DOTALL | re.IGNORECASE):
-        mermaid_code = match.group(1).strip()
-        placeholder = f"MERMAID_PLACEHOLDER_{len(matches)}"
-        matches.append((mermaid_code, placeholder, match.start(), match.end()))
-    return matches
-
-def create_mermaid_image(mermaid_code: str) -> ft.Control:
-    """
-    マーメイドコードから画像コンポーネントを作成
-    mermaid.ink APIを使用してSVG画像を取得
-    """
-    try:
-        # mermaid.ink APIを使用してSVG画像を取得
-        # base64エンコードされたマーメイドコードを送信
-        # mermaid.inkは標準のbase64エンコードを使用
-        encoded_code = base64.b64encode(mermaid_code.encode('utf-8')).decode('utf-8')
-        # base64文字列の+と/をURLセーフな文字に置換（mermaid.inkの要件）
-        encoded_code = encoded_code.replace('+', '-').replace('/', '_').replace('=', '')
-        mermaid_url = f"https://mermaid.ink/svg/{encoded_code}"
-        
-        logging.info(f"マーメイド図のURLを生成: {mermaid_url[:150]}... (コード長: {len(mermaid_code)})")
-        logging.debug(f"マーメイドコード: {mermaid_code[:200]}...")
-        
-        # 画像コンポーネントを作成
-        mermaid_image = ft.Image(
-            src=mermaid_url,
-            fit=ft.ImageFit.CONTAIN,
-            width=None,  # 幅を自動調整
-            error_content=ft.Text(
-                f"マーメイド図の読み込みに失敗しました\nコード: {mermaid_code[:50]}...", 
-                color=ft.Colors.ORANGE, 
-                italic=True,
-                size=10
-            )
-        )
-        
-        # コンテナで囲んで表示
-        return ft.Container(
-            content=mermaid_image,
-            padding=ft.padding.all(10),
-            border=ft.border.all(1, ft.Colors.OUTLINE_VARIANT),
-            border_radius=ft.border_radius.all(5),
-            margin=ft.margin.symmetric(vertical=5)
-        )
-    except Exception as e:
-        logging.error(f"マーメイド図の作成に失敗: {e}")
-        return ft.Container(
-            content=ft.Text(f"マーメイド図の表示に失敗: {e}", color=ft.Colors.ORANGE, italic=True),
-            padding=ft.padding.all(10),
-            border=ft.border.all(1, ft.Colors.ORANGE),
-            border_radius=ft.border_radius.all(5)
-        )
-
-def render_markdown_with_mermaid(text: str) -> list[ft.Control]:
-    """
-    Markdownテキストをマーメイドブロックで分割し、Markdownとマーメイド画像を交互に表示
-    戻り値: [ft.Control, ...] のリスト
-    """
-    mermaid_blocks = extract_mermaid_blocks(text)
-    if not mermaid_blocks:
-        # マーメイドブロックがない場合は通常のMarkdownを返す
-        formatted_text = format_blockquotes_for_readability(text)
-        return [ft.Markdown(
-            f"**Gemini:**\n{formatted_text}",
-            selectable=True,
-            code_theme="dracula",
-            extension_set=ft.MarkdownExtensionSet.COMMON_MARK,
-            auto_follow_links=True
-        )]
-    
-    # マーメイドブロックで分割
-    controls = []
-    last_pos = 0
-    
-    for mermaid_code, placeholder, start_pos, end_pos in mermaid_blocks:
-        # マーメイドブロックの前のテキストをMarkdownとして表示
-        if start_pos > last_pos:
-            before_text = text[last_pos:start_pos].strip()
-            if before_text:
-                formatted_before = format_blockquotes_for_readability(before_text)
-                controls.append(ft.Markdown(
-                    formatted_before,
-                    selectable=True,
-                    code_theme="dracula",
-                    extension_set=ft.MarkdownExtensionSet.COMMON_MARK,
-                    auto_follow_links=True
-                ))
-        
-        # マーメイド画像を追加
-        mermaid_image = create_mermaid_image(mermaid_code)
-        controls.append(mermaid_image)
-        
-        last_pos = end_pos
-    
-    # 最後のマーメイドブロックの後のテキストをMarkdownとして表示
-    if last_pos < len(text):
-        after_text = text[last_pos:].strip()
-        if after_text:
-            formatted_after = format_blockquotes_for_readability(after_text)
-            controls.append(ft.Markdown(
-                formatted_after,
-                selectable=True,
-                code_theme="dracula",
-                extension_set=ft.MarkdownExtensionSet.COMMON_MARK,
-                auto_follow_links=True
-            ))
-    
-    # 最初のコントロールに "**Gemini:**" を追加（最初のMarkdownのみ）
-    if controls and isinstance(controls[0], ft.Markdown):
-        first_md = controls[0]
-        first_md.value = f"**Gemini:**\n{first_md.value}"
-    
-    return controls if controls else [ft.Markdown(
-        f"**Gemini:**\n{format_blockquotes_for_readability(text)}",
-        selectable=True,
-        code_theme="dracula",
-        extension_set=ft.MarkdownExtensionSet.COMMON_MARK,
-        auto_follow_links=True
-    )]
 
 # --- Gen AI Initialization ---
 gen_ai_initialized = False
@@ -355,15 +225,25 @@ def main(page: ft.Page):
                 for content in loaded_history:
                     if content.role == "user":
                         user_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
-                        chat_history_display.controls.append(
-                            ft.Text(f"You: {user_text}", selectable=True)
+                        user_message_container = ft.Container(
+                            content=ft.Text(f"You: {user_text}", selectable=True),
+                            padding=ft.padding.symmetric(horizontal=10, vertical=8),
+                            bgcolor="#4242424D",  # GREY_800 with 30% opacity (ARGB format)
+                            border_radius=ft.border_radius.all(8),
+                            margin=ft.margin.only(bottom=5)
                         )
+                        chat_history_display.controls.append(user_message_container)
                     elif content.role == "model":
                         model_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
-                        # マーメイドブロックを含むMarkdownを処理
-                        mermaid_controls = render_markdown_with_mermaid(model_text)
-                        for control in mermaid_controls:
-                            chat_history_display.controls.append(control)
+                        formatted_model_text = format_blockquotes_for_readability(model_text)
+                        response_md = ft.Markdown(
+                            f"**Gemini:**\n{formatted_model_text}", 
+                            selectable=True, 
+                            code_theme="dracula", 
+                            extension_set=ft.MarkdownExtensionSet.COMMON_MARK,  # 軽量化
+                            auto_follow_links=True
+                        )
+                        chat_history_display.controls.append(response_md)
                 
                 status_bar.value = f"前回の会話を復元しました ({len(loaded_history)} メッセージ)"
                 logging.info(f"前回の会話を復元: {len(loaded_history)} メッセージ")
@@ -418,14 +298,9 @@ def main(page: ft.Page):
                  except Exception as cb_err: checkbox_update_errors += 1
              if checkbox_update_errors > 0: logging.warning(f"{checkbox_update_errors} checkboxes failed to update individually on reset.")
 
-        # システムプロンプトテンプレートが選択されている場合は、テンプレート値を保持
-        selected_template = system_prompt_template_dropdown.value
-        if selected_template and selected_template != "なし" and selected_template in ui_components.system_prompt_templates:
-            # 選択されているテンプレートの値を保持
-            system_prompt_field.value = ui_components.system_prompt_templates[selected_template]
-        else:
-            # テンプレートが選択されていない場合はデフォルト値にリセット
-            system_prompt_field.value = config.get("default_system_prompt", "")
+        # システムプロンプトを保持（リセットしない）
+        # 現在のシステムプロンプトの値をそのまま保持
+        # system_prompt_field.value は変更しない
         
         status_bar.value = "Conversation reset."
         
@@ -561,9 +436,15 @@ def main(page: ft.Page):
             logging.warning(f"Pre-calculation of input tokens failed: {token_calc_err}")
             pre_input_tokens = None
 
-        user_message_column = ft.Column([
-            ft.Text(f"You: {prompt_text}", selectable=True)
-        ], spacing=2)
+        user_message_column = ft.Container(
+            content=ft.Column([
+                ft.Text(f"You: {prompt_text}", selectable=True)
+            ], spacing=2),
+            padding=ft.padding.symmetric(horizontal=10, vertical=8),
+            bgcolor="#4242424D",  # GREY_800 with 30% opacity (ARGB format)
+            border_radius=ft.border_radius.all(8),
+            margin=ft.margin.only(bottom=5)
+        )
 
         chat_history_display.controls.append(user_message_column)
         user_input.value = ""  # 即座に入力フィールドをクリア
@@ -729,16 +610,12 @@ def main(page: ft.Page):
                 main_text = full_response_text
                 logging.info(f"Final main text (first 200): {main_text[:200]}...")
 
+                # blockquoteの見た目を改善するために前処理
+                formatted_main_text = format_blockquotes_for_readability(main_text)
                 # ストリーミング完了：カーソルを削除して最終テキストを表示
-                # マーメイドブロックを含むMarkdownを処理
-                # 既存のresponse_rowを削除
-                if response_row in chat_history_display.controls:
-                    chat_history_display.controls.remove(response_row)
-                
-                # マーメイド処理を適用したコントロールを追加
-                mermaid_controls = render_markdown_with_mermaid(main_text)
-                for control in mermaid_controls:
-                    chat_history_display.controls.append(control)
+                # Markdownレンダリングを最適化（一度だけ実行）
+                gemini_response_md.value = f"**Gemini:**\n{formatted_main_text}"
+                gemini_response_md.update()
 
                 # Thinking パネルは表示しない
 
@@ -1004,15 +881,25 @@ def main(page: ft.Page):
                 for content in loaded_history:
                     if content.role == "user":
                         user_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
-                        chat_history_display.controls.append(
-                            ft.Text(f"You: {user_text}", selectable=True)
+                        user_message_container = ft.Container(
+                            content=ft.Text(f"You: {user_text}", selectable=True),
+                            padding=ft.padding.symmetric(horizontal=10, vertical=8),
+                            bgcolor="#4242424D",  # GREY_800 with 30% opacity (ARGB format)
+                            border_radius=ft.border_radius.all(8),
+                            margin=ft.margin.only(bottom=5)
                         )
+                        chat_history_display.controls.append(user_message_container)
                     elif content.role == "model":
                         model_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
-                        # マーメイドブロックを含むMarkdownを処理
-                        mermaid_controls = render_markdown_with_mermaid(model_text)
-                        for control in mermaid_controls:
-                            chat_history_display.controls.append(control)
+                        formatted_model_text = format_blockquotes_for_readability(model_text)
+                        response_md = ft.Markdown(
+                            f"**Gemini:**\n{formatted_model_text}", 
+                            selectable=True, 
+                            code_theme="dracula", 
+                            extension_set=ft.MarkdownExtensionSet.COMMON_MARK,  # 軽量化
+                            auto_follow_links=True
+                        )
+                        chat_history_display.controls.append(response_md)
             
             # セッション情報を更新
             session_info = conversation_manager.get_session_info(new_session)
@@ -1119,10 +1006,13 @@ def main(page: ft.Page):
                                     )
                                 elif content.role == "model":
                                     model_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
-                                    # マーメイドブロックを含むMarkdownを処理
-                                    mermaid_controls = render_markdown_with_mermaid(model_text)
-                                    for control in mermaid_controls:
-                                        chat_history_display.controls.append(control)
+                                    response_md = ft.Markdown(
+                                        f"**Gemini:**\n{model_text}", 
+                                        selectable=True, 
+                                        code_theme="dracula", 
+                                        extension_set=ft.MarkdownExtensionSet.COMMON_MARK  # 軽量化
+                                    )
+                                    chat_history_display.controls.append(response_md)
                         
                         # UI更新
                         refresh_session_list()
@@ -1173,7 +1063,7 @@ def main(page: ft.Page):
         size=11,
         color=ft.Colors.ON_SURFACE_VARIANT,
         selectable=True,
-        max_lines=2,
+        max_lines=1,
         overflow=ft.TextOverflow.ELLIPSIS
     )
     
@@ -1291,10 +1181,14 @@ def main(page: ft.Page):
             ft.Text("Settings", style=ft.TextThemeStyle.TITLE_MEDIUM, expand=True),
         ]),
         ft.Row([
-            ft.Text("プロジェクトパス:", size=11, width=80),
+            ft.Text("プロジェクトパス:", size=11),
             project_path_button
         ], spacing=5),
-        project_path_text,
+        ft.Container(
+            content=project_path_text,
+            expand=True,
+            clip_behavior=ft.ClipBehavior.HARD_EDGE
+        ),
         ft.Divider(),
         
         # Session Management Section
@@ -1338,7 +1232,7 @@ def main(page: ft.Page):
     ], expand=True), expand=True, padding=10)
     
     # リサイズ可能な区切り線
-    resize_divider = ft.Container(
+    resize_divider_container = ft.Container(
         content=ft.VerticalDivider(width=5),
         width=5,
         bgcolor=ft.Colors.OUTLINE_VARIANT
@@ -1347,8 +1241,8 @@ def main(page: ft.Page):
     # リサイズ機能の実装
     def on_pan_start(e):
         """ドラッグ開始"""
-        resize_divider.bgcolor = ft.Colors.PRIMARY
-        resize_divider.update()
+        resize_divider_container.bgcolor = ft.Colors.PRIMARY
+        resize_divider_container.update()
     
     def on_pan_update(e):
         """ドラッグ中"""
@@ -1363,21 +1257,26 @@ def main(page: ft.Page):
     
     def on_pan_end(e):
         """ドラッグ終了"""
-        resize_divider.bgcolor = ft.Colors.OUTLINE_VARIANT
-        resize_divider.update()
+        resize_divider_container.bgcolor = ft.Colors.OUTLINE_VARIANT
+        resize_divider_container.update()
     
     def on_hover_resize(e):
         """ホバー時の色変更"""
         if e.data == "true":
-            resize_divider.bgcolor = ft.Colors.PRIMARY
+            resize_divider_container.bgcolor = ft.Colors.PRIMARY
         else:
-            resize_divider.bgcolor = ft.Colors.OUTLINE_VARIANT
-        resize_divider.update()
+            resize_divider_container.bgcolor = ft.Colors.OUTLINE_VARIANT
+        resize_divider_container.update()
     
-    resize_divider.on_pan_start = on_pan_start
-    resize_divider.on_pan_update = on_pan_update
-    resize_divider.on_pan_end = on_pan_end
-    resize_divider.on_hover = on_hover_resize
+    # GestureDetectorでラップしてドラッグイベントを有効化
+    resize_divider = ft.GestureDetector(
+        content=resize_divider_container,
+        on_pan_start=on_pan_start,
+        on_pan_update=on_pan_update,
+        on_pan_end=on_pan_end,
+        on_hover=on_hover_resize,
+        mouse_cursor=ft.MouseCursor.RESIZE_COLUMN
+    )
     
     main_row = ft.Row([left_panel, resize_divider, right_panel], expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH, spacing=0)
     try: page.add(parameter_bar, main_row)
