@@ -59,7 +59,6 @@ status_bar = ft.Text("")
 
 # --- Conversation State ---
 conversation_history: list[Content] = []
-files_sent_in_convo = False
 is_sending = False
 cancel_requested = False
 

@@ -16,7 +16,7 @@ from ui_components import (
     chat_history_display, user_input, send_button, cancel_button, reset_button, status_bar,
     populate_file_explorer, scroll_to_bottom, extract_thinking,
     conversation_history,
-    files_sent_in_convo, is_sending, cancel_requested,
+    is_sending, cancel_requested,
     thinking_budget_slider, thinking_budget_label, thinking_auto_budget_switch,
     system_prompt_template_dropdown,
     # Session management components
@@ -201,7 +201,6 @@ def main(page: ft.Page):
     logging.info("Main UI function started.")
     # Assign page context to UI elements that need it for updates
     status_bar.page = page; file_explorer_controls.page = page; chat_history_display.page = page
-    global files_sent_in_convo
 
     # Display init error via SnackBar using the correct method
     if init_error_message:
@@ -222,7 +221,7 @@ def main(page: ft.Page):
                 ui_components.conversation_history.extend(loaded_history)
                 
                 # UIに会話履歴を表示
-                for content in loaded_history:
+                for idx, content in enumerate(loaded_history):
                     if content.role == "user":
                         user_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
                         user_message_container = ft.Container(
@@ -243,7 +242,22 @@ def main(page: ft.Page):
                             extension_set=ft.MarkdownExtensionSet.COMMON_MARK,  # 軽量化
                             auto_follow_links=True
                         )
-                        chat_history_display.controls.append(response_md)
+                        response_row_loaded = ft.Row([response_md], vertical_alignment=ft.CrossAxisAlignment.START)
+                        chat_history_display.controls.append(response_row_loaded)
+                        
+                        # 「ここに戻る」ボタンを追加
+                        # idxはloaded_history内のインデックスで、会話履歴のインデックスと同じ
+                        response_index_in_history = idx
+                        rewind_button_loaded = ft.IconButton(
+                            icon=ft.Icons.UNDO_ROUNDED,
+                            tooltip="ここまで会話を戻す",
+                            on_click=create_rewind_handler(response_index_in_history, response_row_loaded),
+                            icon_color=ft.Colors.ON_SURFACE_VARIANT
+                        )
+                        controls_below_response_loaded = ft.Row([
+                            rewind_button_loaded
+                        ], alignment=ft.MainAxisAlignment.END, spacing=5)
+                        chat_history_display.controls.append(controls_below_response_loaded)
                 
                 status_bar.value = f"前回の会話を復元しました ({len(loaded_history)} メッセージ)"
                 logging.info(f"前回の会話を復元: {len(loaded_history)} メッセージ")
@@ -274,13 +288,12 @@ def main(page: ft.Page):
     update_thinking_for_model()
 
     def reset_conversation(e):
-        global files_sent_in_convo
         logging.info("Resetting conversation."); 
         
         # 現在の会話を保存してからリセット
         save_current_conversation()
         
-        conversation_history.clear(); files_sent_in_convo = False
+        conversation_history.clear()
         chat_history_display.controls.clear()
         # Reset checkboxes stored in the dictionary (Reverted logic)
         # Use the imported file_checkboxes directly
@@ -318,6 +331,60 @@ def main(page: ft.Page):
         snackbar = ft.SnackBar(ft.Text("Response text copied!"), open=True, duration=2000)
         page.overlay.append(snackbar)
         page.update()
+    
+    def create_rewind_handler(response_index_in_history, response_row_in_ui):
+        """「ここに戻る」ボタンのハンドラーを作成"""
+        def rewind_to_here(e):
+            try:
+                # 会話履歴から該当メッセージ以降を削除
+                # response_index_in_historyは、このレスポンスが会話履歴の何番目かを示す
+                if response_index_in_history >= 0 and response_index_in_history < len(conversation_history):
+                    # このレスポンス以降を削除（このレスポンス自体は含まない）
+                    conversation_history[:] = conversation_history[:response_index_in_history + 1]
+                    logging.info(f"会話履歴を {response_index_in_history + 1} メッセージまでにリワインドしました")
+                
+                # UIから該当メッセージ以降を削除
+                if response_row_in_ui in chat_history_display.controls:
+                    response_row_index = chat_history_display.controls.index(response_row_in_ui)
+                    # このレスポンス以降のすべてのコントロールを削除
+                    # response_row_in_ui自体とその下のコントロール（トークン情報とボタンを含むRow）は残す
+                    # その次のメッセージから削除する
+                    # response_row_in_uiの次の要素は、トークン情報とボタンを含むRow（controls_below_response）
+                    # その次の要素から削除する
+                    next_index = response_row_index + 1
+                    if next_index < len(chat_history_display.controls):
+                        # 次の要素がボタン行（Row）の場合は、その次から削除
+                        if isinstance(chat_history_display.controls[next_index], ft.Row):
+                            next_index += 1
+                    
+                    # next_index以降のすべてのコントロールを削除
+                    # 後ろから削除することでインデックスの問題を回避
+                    controls_to_remove_count = len(chat_history_display.controls) - next_index
+                    for i in range(controls_to_remove_count):
+                        chat_history_display.controls.pop()
+                    logging.info(f"UIから {controls_to_remove_count} 個のコントロールを削除しました（response_rowとトークン情報/ボタン行は保持）")
+                
+                # セッションを自動保存
+                save_current_conversation()
+                
+                # セッション情報を更新
+                try:
+                    current_session = conversation_manager.current_session
+                    message_count = len(ui_components.conversation_history)
+                    update_session_info(current_session, message_count)
+                except Exception as session_update_err:
+                    logging.warning(f"セッション情報更新エラー: {session_update_err}")
+                
+                status_bar.value = "ここまで会話を戻しました"
+                scroll_to_bottom()
+                page.update()
+                
+            except Exception as rewind_err:
+                logging.error(f"リワインドエラー: {rewind_err}", exc_info=True)
+                status_bar.value = f"リワインドエラー: {rewind_err}"
+                page.update()
+        
+        return rewind_to_here
 
     def cancel_send(e):
         """送信をキャンセルする"""
@@ -327,8 +394,6 @@ def main(page: ft.Page):
         page.update()
 
     def send_message(e):
-        global files_sent_in_convo
-        
         # 既に送信中の場合は重複送信を防ぐ
         if ui_components.is_sending:
             logging.warning("Send attempt blocked: already sending")
@@ -366,43 +431,42 @@ def main(page: ft.Page):
             page.update()
             return
 
-        # プロンプト準備
-        current_prompt_parts = [Part.from_text(prompt_text)]; files_appended_now = False
-        if not files_sent_in_convo:
-            # File reading logic using file_checkboxes (Reverted logic)
-            try:
-                selected_files_this_turn = []
-                if not status_bar.value.startswith("Error scanning"):
-                    # Use the imported file_checkboxes directly
-                    for checkbox, file_path_str in ui_components.file_checkboxes.items():
-                        if checkbox.value:
-                            try:
-                                file_path = pathlib.Path(file_path_str)
-                                if file_path.is_file():
-                                    selected_files_this_turn.append(file_path.name)
-                                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f: file_content = f.read()
-                                    current_prompt_parts.insert(0, Part.from_text(f"--- Content of {file_path.name} ---\n```\n{file_content}\n```\n"))
-                                else:
-                                    logging.warning(f"Selected path is not a file: {file_path_str}")
-                            except Exception as read_err:
-                                file_name = file_path.name if 'file_path' in locals() and hasattr(file_path, 'name') else file_path_str
-                                logging.warning(f"Error reading selected file {file_name}: {read_err}")
-                                chat_history_display.controls.append(ft.Text(f"Error reading {file_name}: {read_err}", color=ft.Colors.ORANGE))
-                                scroll_to_bottom(); page.update()
+        # プロンプト準備 - チェックボックスで選択されているファイルを毎回確認
+        current_prompt_parts = [Part.from_text(prompt_text)]
+        try:
+            selected_files_this_turn = []
+            if not status_bar.value.startswith("Error scanning"):
+                # Use the imported file_checkboxes directly
+                for checkbox, file_path_str in ui_components.file_checkboxes.items():
+                    if checkbox.value:
+                        try:
+                            file_path = pathlib.Path(file_path_str)
+                            if file_path.is_file():
+                                selected_files_this_turn.append(file_path.name)
+                                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f: file_content = f.read()
+                                current_prompt_parts.insert(0, Part.from_text(f"--- Content of {file_path.name} ---\n```\n{file_content}\n```\n"))
+                            else:
+                                logging.warning(f"Selected path is not a file: {file_path_str}")
+                        except Exception as read_err:
+                            file_name = file_path.name if 'file_path' in locals() and hasattr(file_path, 'name') else file_path_str
+                            logging.warning(f"Error reading selected file {file_name}: {read_err}")
+                            chat_history_display.controls.append(ft.Text(f"Error reading {file_name}: {read_err}", color=ft.Colors.ORANGE))
+                            scroll_to_bottom(); page.update()
 
-                if selected_files_this_turn: files_sent_in_convo = True; files_appended_now = True; logging.info(f"Prepending files: {', '.join(selected_files_this_turn)}")
-            except Exception as proc_err: 
-                logging.error("File processing error.", exc_info=True)
-                chat_history_display.controls.append(ft.Text(f"Error processing selected files: {proc_err}", color=ft.Colors.RED))
-                # エラー時のボタン状態リセット
-                ui_components.is_sending = False
-                send_button.visible = True
-                cancel_button.visible = False
-                reset_button.disabled = False
-                status_bar.value = "Error processing files."
-                scroll_to_bottom()
-                page.update()
-                return
+            if selected_files_this_turn:
+                logging.info(f"Prepending files: {', '.join(selected_files_this_turn)}")
+        except Exception as proc_err: 
+            logging.error("File processing error.", exc_info=True)
+            chat_history_display.controls.append(ft.Text(f"Error processing selected files: {proc_err}", color=ft.Colors.RED))
+            # エラー時のボタン状態リセット
+            ui_components.is_sending = False
+            send_button.visible = True
+            cancel_button.visible = False
+            reset_button.disabled = False
+            status_bar.value = "Error processing files."
+            scroll_to_bottom()
+            page.update()
+            return
 
         # 事前に入力トークン数を計算
         current_content = Content(parts=current_prompt_parts, role="user")
@@ -621,8 +685,28 @@ def main(page: ft.Page):
 
                 output_info_display_widget = ft.Text(output_info_text, size=10, italic=True, color=ft.Colors.ON_SURFACE_VARIANT, selectable=True)
 
+                # キャンセルされていない場合のみ会話履歴に追加
+                response_index_in_history = -1
+                if not was_cancelled:
+                    try:
+                        conversation_history.append(current_content)
+                        conversation_history.append(final_model_content)
+                        # このレスポンスのインデックスを記録（モデルレスポンスのインデックス）
+                        response_index_in_history = len(conversation_history) - 1
+                    except Exception as history_err:
+                        logging.error(f"Error finalizing history: {history_err}")
+
+                # 「ここに戻る」ボタンを作成
+                rewind_button = ft.IconButton(
+                    icon=ft.Icons.UNDO_ROUNDED,
+                    tooltip="ここまで会話を戻す",
+                    on_click=create_rewind_handler(response_index_in_history, response_row),
+                    icon_color=ft.Colors.ON_SURFACE_VARIANT
+                )
+
                 controls_below_response = ft.Row([
                     output_info_display_widget,
+                    rewind_button,
                     ft.IconButton(icon=ft.Icons.COPY_ALL_ROUNDED,
                         tooltip="Copy raw response text",
                         on_click=lambda e, text=full_response_text: copy_to_clipboard(e, text)
@@ -635,14 +719,6 @@ def main(page: ft.Page):
                 except ValueError:
                     logging.warning("Could not find response_row to insert controls below, appending instead.")
                     chat_history_display.controls.append(controls_below_response)
-
-                # キャンセルされていない場合のみ会話履歴に追加
-                if not was_cancelled:
-                    try:
-                        conversation_history.append(current_content)
-                        conversation_history.append(final_model_content)
-                    except Exception as history_err:
-                        logging.error(f"Error finalizing history: {history_err}")
 
                 status_bar.value = "✓ Response received."
             else:
@@ -763,44 +839,6 @@ def main(page: ft.Page):
         ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=5, expand=True)
     ]), padding=ft.padding.symmetric(horizontal=10, vertical=5), border=ft.border.only(bottom=ft.BorderSide(1, ft.Colors.OUTLINE_VARIANT)))
 
-    # 選択ファイル表示用の変数（後で定義されるコンポーネントへの参照を保持）
-    selected_files_text_ref = [None]
-    selected_files_list_ref = [None]
-    
-    def update_selected_files_display():
-        """選択中のファイル一覧を更新"""
-        if selected_files_text_ref[0] is None or selected_files_list_ref[0] is None:
-            return
-        
-        selected_files = []
-        for checkbox, file_path_str in ui_components.file_checkboxes.items():
-            if checkbox.value:
-                file_path = pathlib.Path(file_path_str)
-                selected_files.append(file_path.name)
-        
-        # 表示を更新
-        if selected_files:
-            selected_files_text_ref[0].value = f"選択中ファイル ({len(selected_files)}):"
-            selected_files_list_ref[0].controls.clear()
-            for file_name in selected_files:
-                selected_files_list_ref[0].controls.append(
-                    ft.Text(f"  • {file_name}", size=10, color=ft.Colors.ON_SURFACE_VARIANT)
-                )
-        else:
-            selected_files_text_ref[0].value = "選択中ファイル: なし"
-            selected_files_list_ref[0].controls.clear()
-        
-        try:
-            selected_files_text_ref[0].update()
-            selected_files_list_ref[0].update()
-        except:
-            pass
-    
-    def create_file_checkbox_handler():
-        """チェックボックス変更時に選択ファイル表示を更新するハンドラーを作成"""
-        def handler(e):
-            update_selected_files_display()
-        return handler
 
     def refresh_file_explorer(e):
         root_dir = config.get("root_directory")
@@ -809,13 +847,6 @@ def main(page: ft.Page):
             logging.info(f"Manual refresh triggered for: {root_dir}")
             try:
                 populate_file_explorer(root_dir)
-                # 選択ファイル表示を更新
-                update_selected_files_display()
-                # 新しく作成されたチェックボックスにハンドラーを設定
-                file_checkbox_handler = create_file_checkbox_handler()
-                for checkbox in ui_components.file_checkboxes.keys():
-                    if not checkbox.on_change:
-                        checkbox.on_change = file_checkbox_handler
                 status_bar.value = f"Files reloaded from {root_dir}."; page.update()
             except Exception as populate_err:
                 status_bar.value = f"Error refreshing files: {populate_err}"
@@ -878,7 +909,7 @@ def main(page: ft.Page):
                 ui_components.conversation_history.extend(loaded_history)
                 
                 # UIに表示
-                for content in loaded_history:
+                for idx, content in enumerate(loaded_history):
                     if content.role == "user":
                         user_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
                         user_message_container = ft.Container(
@@ -899,7 +930,22 @@ def main(page: ft.Page):
                             extension_set=ft.MarkdownExtensionSet.COMMON_MARK,  # 軽量化
                             auto_follow_links=True
                         )
-                        chat_history_display.controls.append(response_md)
+                        response_row_loaded = ft.Row([response_md], vertical_alignment=ft.CrossAxisAlignment.START)
+                        chat_history_display.controls.append(response_row_loaded)
+                        
+                        # 「ここに戻る」ボタンを追加
+                        # idxはloaded_history内のインデックスで、会話履歴のインデックスと同じ
+                        response_index_in_history = idx
+                        rewind_button_loaded = ft.IconButton(
+                            icon=ft.Icons.UNDO_ROUNDED,
+                            tooltip="ここまで会話を戻す",
+                            on_click=create_rewind_handler(response_index_in_history, response_row_loaded),
+                            icon_color=ft.Colors.ON_SURFACE_VARIANT
+                        )
+                        controls_below_response_loaded = ft.Row([
+                            rewind_button_loaded
+                        ], alignment=ft.MainAxisAlignment.END, spacing=5)
+                        chat_history_display.controls.append(controls_below_response_loaded)
             
             # セッション情報を更新
             session_info = conversation_manager.get_session_info(new_session)
@@ -1083,13 +1129,6 @@ def main(page: ft.Page):
                         
                         # ファイルエクスプローラーを更新
                         populate_file_explorer(new_path)
-                        # 選択ファイル表示を更新
-                        update_selected_files_display()
-                        # 新しく作成されたチェックボックスにハンドラーを設定
-                        file_checkbox_handler = create_file_checkbox_handler()
-                        for checkbox in ui_components.file_checkboxes.keys():
-                            if not checkbox.on_change:
-                                checkbox.on_change = file_checkbox_handler
                         
                         status_bar.value = f"プロジェクトパスを更新しました: {new_path}"
                         page.update()
@@ -1139,38 +1178,6 @@ def main(page: ft.Page):
         height=30
     )
 
-    # Selected Files Section - 変数定義をColumnの外で行う
-    selected_files_text = ft.Text(
-        "選択中ファイル: なし",
-        size=11,
-        color=ft.Colors.ON_SURFACE_VARIANT,
-        italic=True
-    )
-    selected_files_text_ref[0] = selected_files_text
-    
-    selected_files_list = ft.Column(
-        [],
-        spacing=2,
-        scroll=ft.ScrollMode.ADAPTIVE,
-        height=80
-    )
-    selected_files_list_ref[0] = selected_files_list
-    
-    # 既存のチェックボックスにハンドラーを設定
-    file_checkbox_handler = create_file_checkbox_handler()
-    for checkbox in ui_components.file_checkboxes.keys():
-        # 既存のハンドラーがある場合は保持
-        if checkbox.on_change:
-            original_handler = checkbox.on_change
-            def make_wrapper(orig):
-                def wrapper(e):
-                    if orig:
-                        orig(e)
-                    update_selected_files_display()
-                return wrapper
-            checkbox.on_change = make_wrapper(original_handler)
-        else:
-            checkbox.on_change = file_checkbox_handler
 
     # 左ペインの幅を管理する変数（初期値400）
     left_panel_width = [400]  # リストを使用してnonlocalスコープを回避
@@ -1204,14 +1211,6 @@ def main(page: ft.Page):
             new_session_name_field
         ], spacing=5),
         session_info_text,
-        ft.Divider(),
-        
-        # Selected Files Section
-        ft.Row([
-            ft.Text("Selected Files", style=ft.TextThemeStyle.TITLE_MEDIUM, expand=True),
-        ]),
-        selected_files_text,
-        selected_files_list,
         ft.Divider(),
         
         # File Explorer Section
@@ -1286,13 +1285,6 @@ def main(page: ft.Page):
     if root_dir:
         try: 
             populate_file_explorer(root_dir)
-            # ファイルエクスプローラー読み込み後に選択ファイル表示を更新
-            update_selected_files_display()
-            # 新しく作成されたチェックボックスにハンドラーを設定
-            file_checkbox_handler = create_file_checkbox_handler()
-            for checkbox in ui_components.file_checkboxes.keys():
-                if not checkbox.on_change:
-                    checkbox.on_change = file_checkbox_handler
         except Exception as populate_err: status_bar.value = f"Error populating files: {populate_err}"; logging.error("Populate error", exc_info=True)
     else: status_bar.value = "Set 'root_directory' in config.json"; logging.warning(status_bar.value)
     
