@@ -406,7 +406,26 @@ def main(page: ft.Page):
         if ui_components.is_sending:
             logging.warning("Send attempt blocked: already sending")
             return
-        
+
+        prompt_text = user_input.value.strip()
+        system_prompt_text = system_prompt_field.value.strip()
+        if not prompt_text:
+            snackbar = ft.SnackBar(ft.Text("Please enter a prompt."), open=True)
+            page.overlay.append(snackbar)
+            page.update()
+            return
+        if not gen_ai_initialized:
+            logging.warning("Send: Gen AI not initialized.")
+            error_msg = init_error_message if init_error_message else "Gen AI が初期化されていません。config.json の設定を確認してください。"
+            snackbar = ft.SnackBar(
+                ft.Text(error_msg, size=12),
+                open=True,
+                duration=5000
+            )
+            page.overlay.append(snackbar)
+            page.update()
+            return
+
         # 即座にUI状態を更新してフィードバックを提供
         ui_components.is_sending = True
         send_button.visible = False
@@ -420,24 +439,9 @@ def main(page: ft.Page):
             page.update()
         except Exception as immediate_ui_err:
             logging.warning(f"Immediate UI update error: {immediate_ui_err}")
-        
+
         # キャンセルリクエストをリセット
         ui_components.cancel_requested = False
-        
-        prompt_text = user_input.value.strip()
-        system_prompt_text = system_prompt_field.value.strip()
-        if not prompt_text: snackbar = ft.SnackBar(ft.Text("Please enter a prompt."), open=True); page.overlay.append(snackbar); page.update(); return
-        if not gen_ai_initialized: 
-            logging.warning("Send: Gen AI not initialized."); 
-            error_msg = init_error_message if init_error_message else "Gen AI が初期化されていません。config.json の設定を確認してください。"
-            snackbar = ft.SnackBar(
-                ft.Text(error_msg, size=12), 
-                open=True, 
-                duration=5000
-            )
-            page.overlay.append(snackbar)
-            page.update()
-            return
 
         # プロンプト準備 - チェックボックスで選択されているファイルを毎回確認
         current_prompt_parts = [Part.from_text(prompt_text)]
