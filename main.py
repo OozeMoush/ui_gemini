@@ -225,7 +225,7 @@ def main(page: ft.Page):
                     if content.role == "user":
                         user_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
                         user_message_container = ft.Container(
-                            content=ft.Text(f"You: {user_text}", selectable=True, wrap=True),
+                            content=ft.Text(f"You: {user_text}", selectable=True),
                             padding=ft.padding.symmetric(horizontal=10, vertical=8),
                             bgcolor="#4242424D",  # GREY_800 with 30% opacity (ARGB format)
                             border_radius=ft.border_radius.all(8),
@@ -456,14 +456,14 @@ def main(page: ft.Page):
                         except Exception as read_err:
                             file_name = file_path.name if 'file_path' in locals() and hasattr(file_path, 'name') else file_path_str
                             logging.warning(f"Error reading selected file {file_name}: {read_err}")
-                            chat_history_display.controls.append(ft.Text(f"Error reading {file_name}: {read_err}", color=ft.Colors.ORANGE, wrap=True))
+                            chat_history_display.controls.append(ft.Text(f"Error reading {file_name}: {read_err}", color=ft.Colors.ORANGE, ))
                             scroll_to_bottom(); page.update()
 
             if selected_files_this_turn:
                 logging.info(f"Prepending files: {', '.join(selected_files_this_turn)}")
         except Exception as proc_err: 
             logging.error("File processing error.", exc_info=True)
-            chat_history_display.controls.append(ft.Text(f"Error processing selected files: {proc_err}", color=ft.Colors.RED, wrap=True))
+            chat_history_display.controls.append(ft.Text(f"Error processing selected files: {proc_err}", color=ft.Colors.RED, ))
             # エラー時のボタン状態リセット
             ui_components.is_sending = False
             send_button.visible = True
@@ -508,7 +508,7 @@ def main(page: ft.Page):
 
         user_message_column = ft.Container(
             content=ft.Column([
-                ft.Text(f"You: {prompt_text}", selectable=True, wrap=True)
+                ft.Text(f"You: {prompt_text}", selectable=True)
             ], spacing=2),
             padding=ft.padding.symmetric(horizontal=10, vertical=8),
             bgcolor="#4242424D",  # GREY_800 with 30% opacity (ARGB format)
@@ -671,7 +671,7 @@ def main(page: ft.Page):
                 logging.error(f"API Client Error: {api_error_message}")
                 if response_row in chat_history_display.controls:
                      chat_history_display.controls.remove(response_row)
-                chat_history_display.controls.append(ft.Text(f"API Error: {api_error_message}", color=ft.Colors.RED, wrap=True))
+                chat_history_display.controls.append(ft.Text(f"API Error: {api_error_message}", color=ft.Colors.RED, ))
                 status_bar.value = "API Error occurred."
             elif full_response_text is not None and final_model_content is not None:
                 logging.debug(f"Stream finished. Full raw length: {len(full_response_text)}")
@@ -689,7 +689,7 @@ def main(page: ft.Page):
 
                 # Thinking パネルは表示しない
 
-                output_info_display_widget = ft.Text(output_info_text, size=10, italic=True, color=ft.Colors.ON_SURFACE_VARIANT, selectable=True, wrap=True)
+                output_info_display_widget = ft.Text(output_info_text, size=10, italic=True, color=ft.Colors.ON_SURFACE_VARIANT, selectable=True)
 
                 # キャンセルされていない場合のみ会話履歴に追加
                 response_index_in_history = -1
@@ -732,8 +732,8 @@ def main(page: ft.Page):
                 if response_row in chat_history_display.controls:
                      chat_history_display.controls.remove(response_row)
                 empty_response_column = ft.Column([
-                    ft.Text("Received empty response.", color=ft.Colors.AMBER, wrap=True),
-                    ft.Text(output_info_text, size=10, italic=True, color=ft.Colors.ON_SURFACE_VARIANT, wrap=True) if output_info_text else ft.Container()
+                    ft.Text("Received empty response.", color=ft.Colors.AMBER, ),
+                    ft.Text(output_info_text, size=10, italic=True, color=ft.Colors.ON_SURFACE_VARIANT, ) if output_info_text else ft.Container()
                 ], spacing=2)
                 chat_history_display.controls.append(empty_response_column)
                 status_bar.value = "Empty response received."
@@ -746,7 +746,7 @@ def main(page: ft.Page):
             if 'response_row' in locals() and response_row in chat_history_display.controls:
                  chat_history_display.controls.remove(response_row)
 
-            chat_history_display.controls.append(ft.Text(f"App Error: {error_message}", color=ft.Colors.RED, wrap=True))
+            chat_history_display.controls.append(ft.Text(f"App Error: {error_message}", color=ft.Colors.RED, ))
             status_bar.value = "Application Error occurred."
             scroll_to_bottom()
         finally:
@@ -928,7 +928,7 @@ def main(page: ft.Page):
                     if content.role == "user":
                         user_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
                         user_message_container = ft.Container(
-                            content=ft.Text(f"You: {user_text}", selectable=True, wrap=True),
+                            content=ft.Text(f"You: {user_text}", selectable=True),
                             padding=ft.padding.symmetric(horizontal=10, vertical=8),
                             bgcolor="#4242424D",  # GREY_800 with 30% opacity (ARGB format)
                             border_radius=ft.border_radius.all(8),
