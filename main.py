@@ -225,7 +225,7 @@ def main(page: ft.Page):
                     if content.role == "user":
                         user_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
                         user_message_container = ft.Container(
-                            content=ft.Text(f"You: {user_text}", selectable=True),
+                            content=ft.Text(f"You: {user_text}", selectable=True, wrap=True),
                             padding=ft.padding.symmetric(horizontal=10, vertical=8),
                             bgcolor="#4242424D",  # GREY_800 with 30% opacity (ARGB format)
                             border_radius=ft.border_radius.all(8),
@@ -239,13 +239,13 @@ def main(page: ft.Page):
                             f"**Gemini:**\n{formatted_model_text}", 
                             selectable=True, 
                             code_theme="dracula", 
-                            extension_set=ft.MarkdownExtensionSet.COMMON_MARK,  # 軽量化
+                            extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,  # テーブル表示対応
                             auto_follow_links=True
                         )
                         response_row_loaded = ft.Row([response_md], vertical_alignment=ft.CrossAxisAlignment.START)
                         chat_history_display.controls.append(response_row_loaded)
                         
-                        # 「ここに戻る」ボタンを追加
+                        # 「ここに戻る」ボタンとコピーボタンを追加
                         # idxはloaded_history内のインデックスで、会話履歴のインデックスと同じ
                         response_index_in_history = idx
                         rewind_button_loaded = ft.IconButton(
@@ -254,8 +254,14 @@ def main(page: ft.Page):
                             on_click=create_rewind_handler(response_index_in_history, response_row_loaded),
                             icon_color=ft.Colors.ON_SURFACE_VARIANT
                         )
+                        copy_button_loaded = ft.IconButton(
+                            icon=ft.Icons.COPY_ALL_ROUNDED,
+                            tooltip="Copy raw response text",
+                            on_click=lambda e, text=model_text: copy_to_clipboard(e, text)
+                        )
                         controls_below_response_loaded = ft.Row([
-                            rewind_button_loaded
+                            rewind_button_loaded,
+                            copy_button_loaded
                         ], alignment=ft.MainAxisAlignment.END, spacing=5)
                         chat_history_display.controls.append(controls_below_response_loaded)
                 
@@ -450,14 +456,14 @@ def main(page: ft.Page):
                         except Exception as read_err:
                             file_name = file_path.name if 'file_path' in locals() and hasattr(file_path, 'name') else file_path_str
                             logging.warning(f"Error reading selected file {file_name}: {read_err}")
-                            chat_history_display.controls.append(ft.Text(f"Error reading {file_name}: {read_err}", color=ft.Colors.ORANGE))
+                            chat_history_display.controls.append(ft.Text(f"Error reading {file_name}: {read_err}", color=ft.Colors.ORANGE, wrap=True))
                             scroll_to_bottom(); page.update()
 
             if selected_files_this_turn:
                 logging.info(f"Prepending files: {', '.join(selected_files_this_turn)}")
         except Exception as proc_err: 
             logging.error("File processing error.", exc_info=True)
-            chat_history_display.controls.append(ft.Text(f"Error processing selected files: {proc_err}", color=ft.Colors.RED))
+            chat_history_display.controls.append(ft.Text(f"Error processing selected files: {proc_err}", color=ft.Colors.RED, wrap=True))
             # エラー時のボタン状態リセット
             ui_components.is_sending = False
             send_button.visible = True
@@ -502,7 +508,7 @@ def main(page: ft.Page):
 
         user_message_column = ft.Container(
             content=ft.Column([
-                ft.Text(f"You: {prompt_text}", selectable=True)
+                ft.Text(f"You: {prompt_text}", selectable=True, wrap=True)
             ], spacing=2),
             padding=ft.padding.symmetric(horizontal=10, vertical=8),
             bgcolor="#4242424D",  # GREY_800 with 30% opacity (ARGB format)
@@ -541,11 +547,11 @@ def main(page: ft.Page):
             f"**Gemini:**\n▌", 
             selectable=True, 
             code_theme="dracula", 
-            extension_set=ft.MarkdownExtensionSet.COMMON_MARK,  # GITHUB_WEBより軽量
+            extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,  # テーブル表示対応
             auto_follow_links=True, 
             on_tap_link=lambda e: page.launch_url(e.data)
         )
-        gemini_response_container = ft.Container(content=gemini_response_md, padding=ft.padding.only(bottom=10), expand=True)
+        gemini_response_container = ft.Container(content=gemini_response_md, padding=ft.padding.only(bottom=10), expand=True, width=None)
         response_row = ft.Row([gemini_response_container], vertical_alignment=ft.CrossAxisAlignment.START)
         chat_history_display.controls.append(response_row)
         scroll_to_bottom(); page.update()
@@ -665,7 +671,7 @@ def main(page: ft.Page):
                 logging.error(f"API Client Error: {api_error_message}")
                 if response_row in chat_history_display.controls:
                      chat_history_display.controls.remove(response_row)
-                chat_history_display.controls.append(ft.Text(f"API Error: {api_error_message}", color=ft.Colors.RED))
+                chat_history_display.controls.append(ft.Text(f"API Error: {api_error_message}", color=ft.Colors.RED, wrap=True))
                 status_bar.value = "API Error occurred."
             elif full_response_text is not None and final_model_content is not None:
                 logging.debug(f"Stream finished. Full raw length: {len(full_response_text)}")
@@ -683,7 +689,7 @@ def main(page: ft.Page):
 
                 # Thinking パネルは表示しない
 
-                output_info_display_widget = ft.Text(output_info_text, size=10, italic=True, color=ft.Colors.ON_SURFACE_VARIANT, selectable=True)
+                output_info_display_widget = ft.Text(output_info_text, size=10, italic=True, color=ft.Colors.ON_SURFACE_VARIANT, selectable=True, wrap=True)
 
                 # キャンセルされていない場合のみ会話履歴に追加
                 response_index_in_history = -1
@@ -726,8 +732,8 @@ def main(page: ft.Page):
                 if response_row in chat_history_display.controls:
                      chat_history_display.controls.remove(response_row)
                 empty_response_column = ft.Column([
-                    ft.Text("Received empty response.", color=ft.Colors.AMBER),
-                    ft.Text(output_info_text, size=10, italic=True, color=ft.Colors.ON_SURFACE_VARIANT) if output_info_text else ft.Container()
+                    ft.Text("Received empty response.", color=ft.Colors.AMBER, wrap=True),
+                    ft.Text(output_info_text, size=10, italic=True, color=ft.Colors.ON_SURFACE_VARIANT, wrap=True) if output_info_text else ft.Container()
                 ], spacing=2)
                 chat_history_display.controls.append(empty_response_column)
                 status_bar.value = "Empty response received."
@@ -740,7 +746,7 @@ def main(page: ft.Page):
             if 'response_row' in locals() and response_row in chat_history_display.controls:
                  chat_history_display.controls.remove(response_row)
 
-            chat_history_display.controls.append(ft.Text(f"App Error: {error_message}", color=ft.Colors.RED))
+            chat_history_display.controls.append(ft.Text(f"App Error: {error_message}", color=ft.Colors.RED, wrap=True))
             status_bar.value = "Application Error occurred."
             scroll_to_bottom()
         finally:
@@ -761,6 +767,15 @@ def main(page: ft.Page):
                 reset_button.update()
             except Exception as button_reset_err:
                 logging.warning(f"Button reset error: {button_reset_err}")
+            
+            # 選択されているファイルをリセット
+            try:
+                for checkbox in ui_components.file_checkboxes.keys():
+                    checkbox.value = False
+                ui_components.file_explorer_controls.update()
+                logging.debug("ファイル選択をリセットしました")
+            except Exception as file_reset_err:
+                logging.warning(f"ファイル選択リセットエラー: {file_reset_err}")
             
             # キャンセルされた場合の処理
             if was_cancelled:
@@ -913,7 +928,7 @@ def main(page: ft.Page):
                     if content.role == "user":
                         user_text = "\n".join([part.text for part in content.parts if hasattr(part, 'text')])
                         user_message_container = ft.Container(
-                            content=ft.Text(f"You: {user_text}", selectable=True),
+                            content=ft.Text(f"You: {user_text}", selectable=True, wrap=True),
                             padding=ft.padding.symmetric(horizontal=10, vertical=8),
                             bgcolor="#4242424D",  # GREY_800 with 30% opacity (ARGB format)
                             border_radius=ft.border_radius.all(8),
@@ -927,13 +942,13 @@ def main(page: ft.Page):
                             f"**Gemini:**\n{formatted_model_text}", 
                             selectable=True, 
                             code_theme="dracula", 
-                            extension_set=ft.MarkdownExtensionSet.COMMON_MARK,  # 軽量化
+                            extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,  # テーブル表示対応
                             auto_follow_links=True
                         )
                         response_row_loaded = ft.Row([response_md], vertical_alignment=ft.CrossAxisAlignment.START)
                         chat_history_display.controls.append(response_row_loaded)
                         
-                        # 「ここに戻る」ボタンを追加
+                        # 「ここに戻る」ボタンとコピーボタンを追加
                         # idxはloaded_history内のインデックスで、会話履歴のインデックスと同じ
                         response_index_in_history = idx
                         rewind_button_loaded = ft.IconButton(
@@ -942,8 +957,14 @@ def main(page: ft.Page):
                             on_click=create_rewind_handler(response_index_in_history, response_row_loaded),
                             icon_color=ft.Colors.ON_SURFACE_VARIANT
                         )
+                        copy_button_loaded = ft.IconButton(
+                            icon=ft.Icons.COPY_ALL_ROUNDED,
+                            tooltip="Copy raw response text",
+                            on_click=lambda e, text=model_text: copy_to_clipboard(e, text)
+                        )
                         controls_below_response_loaded = ft.Row([
-                            rewind_button_loaded
+                            rewind_button_loaded,
+                            copy_button_loaded
                         ], alignment=ft.MainAxisAlignment.END, spacing=5)
                         chat_history_display.controls.append(controls_below_response_loaded)
             
@@ -1056,7 +1077,7 @@ def main(page: ft.Page):
                                         f"**Gemini:**\n{model_text}", 
                                         selectable=True, 
                                         code_theme="dracula", 
-                                        extension_set=ft.MarkdownExtensionSet.COMMON_MARK  # 軽量化
+                                        extension_set=ft.MarkdownExtensionSet.GITHUB_WEB  # テーブル表示対応
                                     )
                                     chat_history_display.controls.append(response_md)
                         

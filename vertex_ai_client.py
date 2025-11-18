@@ -120,7 +120,7 @@ def get_accurate_token_count(client, model_name: str, contents: list, system_ins
         estimated_input_tokens = sum(len(content["parts"][0]["text"]) for content in gen_ai_contents) // 4
         return estimated_input_tokens, 0
 
-def calculate_cost_accurate(model_name: str, input_tokens: int, output_tokens: int, has_thinking: bool = False) -> tuple[float, float, float]:
+def calculate_cost_accurate(model_name: str, input_tokens: int, output_tokens: int, has_thinking: bool = False, cached_tokens: int = 0) -> tuple[float, float, float]:
     """
     正確な料金体系に基づいてコストを計算する
     
@@ -129,6 +129,7 @@ def calculate_cost_accurate(model_name: str, input_tokens: int, output_tokens: i
         input_tokens: 入力トークン数
         output_tokens: 出力トークン数  
         has_thinking: 思考トークンが含まれているか
+        cached_tokens: キャッシュされたトークン数（通常のInputトークンの約1/10の価格）
         
     Returns:
         tuple[input_cost, output_cost, total_cost]
@@ -139,12 +140,23 @@ def calculate_cost_accurate(model_name: str, input_tokens: int, output_tokens: i
     input_cost = 0.0
     output_cost = 0.0
     
+    # キャッシュトークン数を考慮（0未満にならないように）
+    cached_tokens = max(0, cached_tokens) if cached_tokens else 0
+    non_cached_input_tokens = max(0, input_tokens - cached_tokens)
+    
     # モデル別料金計算
     model_lower = model_name.lower()
     
+    # キャッシュトークンの価格は通常のInputトークンの約1/10
+    CACHED_TOKEN_DISCOUNT = 0.1
+    
     if "gemini-2.5-flash" in model_lower:
         # Gemini 2.5 Flash料金
-        input_cost = (input_tokens / 1_000_000) * GEMINI_25_FLASH_INPUT_PRICE
+        # キャッシュされていないトークンに通常価格を適用
+        non_cached_cost = (non_cached_input_tokens / 1_000_000) * GEMINI_25_FLASH_INPUT_PRICE
+        # キャッシュされたトークンに割引価格を適用
+        cached_cost = (cached_tokens / 1_000_000) * GEMINI_25_FLASH_INPUT_PRICE * CACHED_TOKEN_DISCOUNT
+        input_cost = non_cached_cost + cached_cost
         
         if output_tokens > 0:
             if has_thinking:
@@ -154,10 +166,14 @@ def calculate_cost_accurate(model_name: str, input_tokens: int, output_tokens: i
                 
     elif "gemini-2.5-pro" in model_lower:
         # Gemini 2.5 Pro料金（ティア制）
+        # ティア判定は元のinput_tokensで行う
         if input_tokens <= TOKEN_THRESHOLD_200K:
-            input_cost = (input_tokens / 1_000_000) * GEMINI_25_PRO_INPUT_PRICE_TIER1
+            non_cached_cost = (non_cached_input_tokens / 1_000_000) * GEMINI_25_PRO_INPUT_PRICE_TIER1
+            cached_cost = (cached_tokens / 1_000_000) * GEMINI_25_PRO_INPUT_PRICE_TIER1 * CACHED_TOKEN_DISCOUNT
         else:
-            input_cost = (input_tokens / 1_000_000) * GEMINI_25_PRO_INPUT_PRICE_TIER2
+            non_cached_cost = (non_cached_input_tokens / 1_000_000) * GEMINI_25_PRO_INPUT_PRICE_TIER2
+            cached_cost = (cached_tokens / 1_000_000) * GEMINI_25_PRO_INPUT_PRICE_TIER2 * CACHED_TOKEN_DISCOUNT
+        input_cost = non_cached_cost + cached_cost
             
         if output_tokens > 0:
             if input_tokens <= TOKEN_THRESHOLD_200K:
@@ -167,14 +183,18 @@ def calculate_cost_accurate(model_name: str, input_tokens: int, output_tokens: i
                 
     elif "gemini-2.0-flash" in model_lower:
         # Gemini 2.0 Flash料金
-        input_cost = (input_tokens / 1_000_000) * GEMINI_20_FLASH_INPUT_PRICE
+        non_cached_cost = (non_cached_input_tokens / 1_000_000) * GEMINI_20_FLASH_INPUT_PRICE
+        cached_cost = (cached_tokens / 1_000_000) * GEMINI_20_FLASH_INPUT_PRICE * CACHED_TOKEN_DISCOUNT
+        input_cost = non_cached_cost + cached_cost
         if output_tokens > 0:
             output_cost = (output_tokens / 1_000_000) * GEMINI_20_FLASH_OUTPUT_PRICE
             
     else:
         # その他のモデル（従来の推定料金を使用）
         price_per_million = GEMINI_25_FLASH_INPUT_PRICE if input_tokens <= TOKEN_THRESHOLD_200K else GEMINI_25_PRO_INPUT_PRICE_TIER2
-        input_cost = (input_tokens / 1_000_000) * price_per_million
+        non_cached_cost = (non_cached_input_tokens / 1_000_000) * price_per_million
+        cached_cost = (cached_tokens / 1_000_000) * price_per_million * CACHED_TOKEN_DISCOUNT
+        input_cost = non_cached_cost + cached_cost
         
         if output_tokens > 0:
             output_price = GEMINI_25_FLASH_OUTPUT_NON_THINKING_PRICE if output_tokens <= TOKEN_THRESHOLD_200K else GEMINI_25_PRO_OUTPUT_PRICE_TIER2
@@ -259,6 +279,7 @@ def generate_gemini_response(
     error_message = None
     input_token_count = None
     output_token_count = None
+    cached_token_count = 0  # キャッシュされたトークン数
     input_cost = None
     output_cost = None
     total_cost = None
@@ -422,6 +443,13 @@ def generate_gemini_response(
                             if hasattr(chunk.usage_metadata, 'thoughts_token_count'):
                                 thinking_token_count = chunk.usage_metadata.thoughts_token_count
                                 logging.info(f"Thinking tokens used: {thinking_token_count}")
+                            # キャッシュされたトークン数を取得
+                            if hasattr(chunk.usage_metadata, 'cached_content_token_count'):
+                                cached_token_count = chunk.usage_metadata.cached_content_token_count
+                                logging.info(f"Cached tokens: {cached_token_count}")
+                            elif hasattr(chunk.usage_metadata, 'cached_tokens'):
+                                cached_token_count = chunk.usage_metadata.cached_tokens
+                                logging.info(f"Cached tokens: {cached_token_count}")
                         
                     except Exception as chunk_proc_err:
                         logging.error(f"Error processing stream chunk: {chunk_proc_err}", exc_info=True)
@@ -520,16 +548,18 @@ def generate_gemini_response(
     else:
         logging.info("Output: Empty response received.")
 
-    # コスト計算
+    # コスト計算（キャッシュトークン数を考慮）
     input_cost, output_cost, total_cost = calculate_cost_accurate(
         model_name, 
         input_token_count or 0, 
         output_token_count or 0, 
-        has_thinking and bool(full_thinking_text)
+        has_thinking and bool(full_thinking_text),
+        cached_token_count
     )
 
     if total_cost is not None:
-        log_cost_detail = f"Input: ${input_cost:.6f} ({input_token_count} tokens), Output: ${output_cost:.6f} ({output_token_count} tokens - estimated)"
+        cache_info = f" (cached: {cached_token_count})" if cached_token_count > 0 else ""
+        log_cost_detail = f"Input: ${input_cost:.6f} ({input_token_count} tokens{cache_info}), Output: ${output_cost:.6f} ({output_token_count} tokens - estimated)"
         logging.info(f"Estimated Total Cost: ${total_cost:.6f} ({log_cost_detail})")
     else:
         logging.warning("Could not calculate estimated cost (input tokens unavailable).")
