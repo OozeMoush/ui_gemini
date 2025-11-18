@@ -558,7 +558,7 @@ def generate_gemini_response(
     )
 
     if total_cost is not None:
-        cache_info = f" (cached: {cached_token_count})" if cached_token_count > 0 else ""
+        cache_info = f" (cached: {cached_token_count})" if cached_token_count and cached_token_count > 0 else ""
         log_cost_detail = f"Input: ${input_cost:.6f} ({input_token_count} tokens{cache_info}), Output: ${output_cost:.6f} ({output_token_count} tokens - estimated)"
         logging.info(f"Estimated Total Cost: ${total_cost:.6f} ({log_cost_detail})")
     else:

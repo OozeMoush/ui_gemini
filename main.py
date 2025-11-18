@@ -229,7 +229,9 @@ def main(page: ft.Page):
                             padding=ft.padding.symmetric(horizontal=10, vertical=8),
                             bgcolor="#4242424D",  # GREY_800 with 30% opacity (ARGB format)
                             border_radius=ft.border_radius.all(8),
-                            margin=ft.margin.only(bottom=5)
+                            margin=ft.margin.only(bottom=5),
+                            width=None,
+                            expand=True
                         )
                         chat_history_display.controls.append(user_message_container)
                     elif content.role == "model":
@@ -242,7 +244,7 @@ def main(page: ft.Page):
                             extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,  # テーブル表示対応
                             auto_follow_links=True
                         )
-                        response_row_loaded = ft.Row([response_md], vertical_alignment=ft.CrossAxisAlignment.START)
+                        response_row_loaded = ft.Row([response_md], vertical_alignment=ft.CrossAxisAlignment.START, wrap=True)
                         chat_history_display.controls.append(response_row_loaded)
                         
                         # 「ここに戻る」ボタンとコピーボタンを追加
@@ -456,14 +458,26 @@ def main(page: ft.Page):
                         except Exception as read_err:
                             file_name = file_path.name if 'file_path' in locals() and hasattr(file_path, 'name') else file_path_str
                             logging.warning(f"Error reading selected file {file_name}: {read_err}")
-                            chat_history_display.controls.append(ft.Text(f"Error reading {file_name}: {read_err}", color=ft.Colors.ORANGE, ))
+                            error_text = ft.Container(
+                                content=ft.Text(f"Error reading {file_name}: {read_err}", color=ft.Colors.ORANGE),
+                                padding=ft.padding.symmetric(horizontal=10, vertical=8),
+                                width=None,
+                                expand=True
+                            )
+                            chat_history_display.controls.append(error_text)
                             scroll_to_bottom(); page.update()
 
             if selected_files_this_turn:
                 logging.info(f"Prepending files: {', '.join(selected_files_this_turn)}")
         except Exception as proc_err: 
             logging.error("File processing error.", exc_info=True)
-            chat_history_display.controls.append(ft.Text(f"Error processing selected files: {proc_err}", color=ft.Colors.RED, ))
+            error_text = ft.Container(
+                content=ft.Text(f"Error processing selected files: {proc_err}", color=ft.Colors.RED),
+                padding=ft.padding.symmetric(horizontal=10, vertical=8),
+                width=None,
+                expand=True
+            )
+            chat_history_display.controls.append(error_text)
             # エラー時のボタン状態リセット
             ui_components.is_sending = False
             send_button.visible = True
@@ -513,7 +527,9 @@ def main(page: ft.Page):
             padding=ft.padding.symmetric(horizontal=10, vertical=8),
             bgcolor="#4242424D",  # GREY_800 with 30% opacity (ARGB format)
             border_radius=ft.border_radius.all(8),
-            margin=ft.margin.only(bottom=5)
+            margin=ft.margin.only(bottom=5),
+            width=None,
+            expand=True
         )
 
         chat_history_display.controls.append(user_message_column)
@@ -552,7 +568,7 @@ def main(page: ft.Page):
             on_tap_link=lambda e: page.launch_url(e.data)
         )
         gemini_response_container = ft.Container(content=gemini_response_md, padding=ft.padding.only(bottom=10), expand=True, width=None)
-        response_row = ft.Row([gemini_response_container], vertical_alignment=ft.CrossAxisAlignment.START)
+        response_row = ft.Row([gemini_response_container], vertical_alignment=ft.CrossAxisAlignment.START, wrap=True)
         chat_history_display.controls.append(response_row)
         scroll_to_bottom(); page.update()
 
@@ -671,7 +687,13 @@ def main(page: ft.Page):
                 logging.error(f"API Client Error: {api_error_message}")
                 if response_row in chat_history_display.controls:
                      chat_history_display.controls.remove(response_row)
-                chat_history_display.controls.append(ft.Text(f"API Error: {api_error_message}", color=ft.Colors.RED, ))
+                error_text = ft.Container(
+                    content=ft.Text(f"API Error: {api_error_message}", color=ft.Colors.RED),
+                    padding=ft.padding.symmetric(horizontal=10, vertical=8),
+                    width=None,
+                    expand=True
+                )
+                chat_history_display.controls.append(error_text)
                 status_bar.value = "API Error occurred."
             elif full_response_text is not None and final_model_content is not None:
                 logging.debug(f"Stream finished. Full raw length: {len(full_response_text)}")
@@ -732,8 +754,16 @@ def main(page: ft.Page):
                 if response_row in chat_history_display.controls:
                      chat_history_display.controls.remove(response_row)
                 empty_response_column = ft.Column([
-                    ft.Text("Received empty response.", color=ft.Colors.AMBER, ),
-                    ft.Text(output_info_text, size=10, italic=True, color=ft.Colors.ON_SURFACE_VARIANT, ) if output_info_text else ft.Container()
+                    ft.Container(
+                        content=ft.Text("Received empty response.", color=ft.Colors.AMBER),
+                        width=None,
+                        expand=True
+                    ),
+                    ft.Container(
+                        content=ft.Text(output_info_text, size=10, italic=True, color=ft.Colors.ON_SURFACE_VARIANT),
+                        width=None,
+                        expand=True
+                    ) if output_info_text else ft.Container()
                 ], spacing=2)
                 chat_history_display.controls.append(empty_response_column)
                 status_bar.value = "Empty response received."
@@ -746,7 +776,13 @@ def main(page: ft.Page):
             if 'response_row' in locals() and response_row in chat_history_display.controls:
                  chat_history_display.controls.remove(response_row)
 
-            chat_history_display.controls.append(ft.Text(f"App Error: {error_message}", color=ft.Colors.RED, ))
+            error_text = ft.Container(
+                content=ft.Text(f"App Error: {error_message}", color=ft.Colors.RED),
+                padding=ft.padding.symmetric(horizontal=10, vertical=8),
+                width=None,
+                expand=True
+            )
+            chat_history_display.controls.append(error_text)
             status_bar.value = "Application Error occurred."
             scroll_to_bottom()
         finally:
@@ -932,7 +968,9 @@ def main(page: ft.Page):
                             padding=ft.padding.symmetric(horizontal=10, vertical=8),
                             bgcolor="#4242424D",  # GREY_800 with 30% opacity (ARGB format)
                             border_radius=ft.border_radius.all(8),
-                            margin=ft.margin.only(bottom=5)
+                            margin=ft.margin.only(bottom=5),
+                            width=None,
+                            expand=True
                         )
                         chat_history_display.controls.append(user_message_container)
                     elif content.role == "model":
@@ -945,7 +983,7 @@ def main(page: ft.Page):
                             extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,  # テーブル表示対応
                             auto_follow_links=True
                         )
-                        response_row_loaded = ft.Row([response_md], vertical_alignment=ft.CrossAxisAlignment.START)
+                        response_row_loaded = ft.Row([response_md], vertical_alignment=ft.CrossAxisAlignment.START, wrap=True)
                         chat_history_display.controls.append(response_row_loaded)
                         
                         # 「ここに戻る」ボタンとコピーボタンを追加
