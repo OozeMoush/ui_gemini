@@ -116,6 +116,8 @@ current_session_name = "default"
 def main(page: ft.Page):
     page.title = "Gemini UI Chat"
     page.theme_mode = ft.ThemeMode.DARK # Keep Dark theme
+    page.bgcolor = ft.Colors.GREY_900 # 背景色を固定
+
     
     # シンプルで読みやすいダークテーマ
     # 日本語フォントを設定（システムフォントを自動検出）
@@ -649,12 +651,16 @@ def main(page: ft.Page):
 
             # 入力・出力情報を統合して表示
             info_parts = []
+
+            # レート取得
+            exchange_rate = config.get("exchange_rate", 150.0)
             
             # 入力情報
             if input_tokens is not None:
                 input_info = f"Input: {input_tokens} tokens"
                 if input_cost is not None:
-                    input_info += f" | ${input_cost:.6f}"
+                    input_yen = input_cost * exchange_rate
+                    input_info += f" | ¥{input_yen:.2f}"
                 info_parts.append(input_info)
             else:
                 info_parts.append("Input: 取得できませんでした")
@@ -667,15 +673,15 @@ def main(page: ft.Page):
                 if thinking_tokens > 0:
                     output_info += f" (+{thinking_tokens} thinking)"
                 if output_cost is not None:
-                    output_info += f" | ${output_cost:.6f}"
+                    output_yen = output_cost * exchange_rate
+                    output_info += f" | ¥{output_yen:.2f}"
                 info_parts.append(output_info)
             
             # 合計コスト
             cost_breakdown_available = input_cost is not None and output_cost is not None and total_cost is not None
-            if cost_breakdown_available:
-                info_parts.append(f"Total: ${total_cost:.6f}")
-            elif total_cost is not None:
-                info_parts.append(f"Total: ${total_cost:.6f}")
+            if cost_breakdown_available or total_cost is not None:
+                 total_yen = total_cost * exchange_rate
+                 info_parts.append(f"Total: ¥{total_yen:.2f}")
             
             output_info_text = " | ".join(info_parts)
 

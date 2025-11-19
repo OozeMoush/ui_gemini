@@ -3,6 +3,7 @@ import time
 import os
 from google import genai
 from google.genai.types import GenerateContentConfig, ThinkingConfig, HttpOptions
+from config_manager import get_config
 
 # リトライ設定
 MAX_RETRIES = 3  # 最大リトライ回数
@@ -32,7 +33,7 @@ def is_retryable_error(error: Exception) -> bool:
         return True
     
     return False
-# Content, Partクラスをここで定義
+
 class Part:
     """メッセージの一部を表すクラス"""
     def __init__(self, text: str = ""):
@@ -50,24 +51,31 @@ class Content:
         self.role = role
 
 # --- Cost Calculation ---
-# Gemini 2.5 Flash料金 (正確な料金、2025年最新)
-GEMINI_25_FLASH_INPUT_PRICE = 0.15  # $/1M tokens (text/image/video)
-GEMINI_25_FLASH_INPUT_AUDIO_PRICE = 1.0  # $/1M tokens (audio)
-GEMINI_25_FLASH_OUTPUT_NON_THINKING_PRICE = 0.60  # $/1M tokens (非思考)
-GEMINI_25_FLASH_OUTPUT_THINKING_PRICE = 3.50  # $/1M tokens (思考含む)
 
-# Gemini 2.5 Pro料金
-GEMINI_25_PRO_INPUT_PRICE_TIER1 = 1.25  # $/1M tokens for <= 200K input
-GEMINI_25_PRO_INPUT_PRICE_TIER2 = 2.5   # $/1M tokens for > 200K input
-GEMINI_25_PRO_OUTPUT_PRICE_TIER1 = 10.0 # $/1M tokens for <= 200K output
-GEMINI_25_PRO_OUTPUT_PRICE_TIER2 = 15.0 # $/1M tokens for > 200K output
-
-# Gemini 2.0 Flash料金
-GEMINI_20_FLASH_INPUT_PRICE = 0.15  # $/1M tokens (text/image/video)
-GEMINI_20_FLASH_INPUT_AUDIO_PRICE = 1.0  # $/1M tokens (audio)
-GEMINI_20_FLASH_OUTPUT_PRICE = 0.60  # $/1M tokens
-
-TOKEN_THRESHOLD_200K = 200000  # 200K tokenのティア境界
+def get_model_pricing(model_name: str) -> dict:
+    """Configからモデルの価格設定を取得する"""
+    config = get_config()
+    pricing_config = config.get("model_pricing", {})
+    
+    if not pricing_config:
+        # フォールバック用のデフォルト設定
+        return {"input": 0.0, "output": 0.0}
+    
+    # 1. 完全一致
+    if model_name in pricing_config:
+        return pricing_config[model_name]
+        
+    # 2. 部分一致 (長いキーを優先)
+    model_lower = model_name.lower()
+    sorted_keys = sorted(pricing_config.keys(), key=len, reverse=True)
+    
+    for key in sorted_keys:
+        if key == "default": continue
+        if key in model_lower:
+            return pricing_config[key]
+            
+    # 3. デフォルト
+    return pricing_config.get("default", {"input": 0.0, "output": 0.0})
 
 def get_accurate_token_count(client, model_name: str, contents: list, system_instruction: Content = None) -> tuple[int, int]:
     """
@@ -140,65 +148,58 @@ def calculate_cost_accurate(model_name: str, input_tokens: int, output_tokens: i
     input_cost = 0.0
     output_cost = 0.0
     
-    # キャッシュトークン数を考慮（0未満にならないように）
+    # 価格設定を取得
+    pricing = get_model_pricing(model_name)
+    
+    # キャッシュトークン数を考慮
     cached_tokens = max(0, cached_tokens) if cached_tokens else 0
     non_cached_input_tokens = max(0, input_tokens - cached_tokens)
     
-    # モデル別料金計算
-    model_lower = model_name.lower()
+    # 入力価格の決定 (Tier対応)
+    input_price = 0.0
+    cached_price = 0.0
     
-    # キャッシュトークンの価格は通常のInputトークンの約1/10
-    CACHED_TOKEN_DISCOUNT = 0.1
-    
-    if "gemini-2.5-flash" in model_lower:
-        # Gemini 2.5 Flash料金
-        # キャッシュされていないトークンに通常価格を適用
-        non_cached_cost = (non_cached_input_tokens / 1_000_000) * GEMINI_25_FLASH_INPUT_PRICE
-        # キャッシュされたトークンに割引価格を適用
-        cached_cost = (cached_tokens / 1_000_000) * GEMINI_25_FLASH_INPUT_PRICE * CACHED_TOKEN_DISCOUNT
-        input_cost = non_cached_cost + cached_cost
+    if "tier1" in pricing:
+        tier1 = pricing["tier1"]
+        tier2 = pricing["tier2"]
+        limit = tier1.get("limit", 200000)
         
-        if output_tokens > 0:
-            if has_thinking:
-                output_cost = (output_tokens / 1_000_000) * GEMINI_25_FLASH_OUTPUT_THINKING_PRICE
-            else:
-                output_cost = (output_tokens / 1_000_000) * GEMINI_25_FLASH_OUTPUT_NON_THINKING_PRICE
-                
-    elif "gemini-2.5-pro" in model_lower:
-        # Gemini 2.5 Pro料金（ティア制）
-        # ティア判定は元のinput_tokensで行う
-        if input_tokens <= TOKEN_THRESHOLD_200K:
-            non_cached_cost = (non_cached_input_tokens / 1_000_000) * GEMINI_25_PRO_INPUT_PRICE_TIER1
-            cached_cost = (cached_tokens / 1_000_000) * GEMINI_25_PRO_INPUT_PRICE_TIER1 * CACHED_TOKEN_DISCOUNT
+        if input_tokens <= limit:
+            input_price = tier1["input"]
+            cached_price = tier1.get("cached_input", tier1["input"] * 0.1) # Default to 10% if not set
         else:
-            non_cached_cost = (non_cached_input_tokens / 1_000_000) * GEMINI_25_PRO_INPUT_PRICE_TIER2
-            cached_cost = (cached_tokens / 1_000_000) * GEMINI_25_PRO_INPUT_PRICE_TIER2 * CACHED_TOKEN_DISCOUNT
-        input_cost = non_cached_cost + cached_cost
-            
-        if output_tokens > 0:
-            if input_tokens <= TOKEN_THRESHOLD_200K:
-                output_cost = (output_tokens / 1_000_000) * GEMINI_25_PRO_OUTPUT_PRICE_TIER1
-            else:
-                output_cost = (output_tokens / 1_000_000) * GEMINI_25_PRO_OUTPUT_PRICE_TIER2
-                
-    elif "gemini-2.0-flash" in model_lower:
-        # Gemini 2.0 Flash料金
-        non_cached_cost = (non_cached_input_tokens / 1_000_000) * GEMINI_20_FLASH_INPUT_PRICE
-        cached_cost = (cached_tokens / 1_000_000) * GEMINI_20_FLASH_INPUT_PRICE * CACHED_TOKEN_DISCOUNT
-        input_cost = non_cached_cost + cached_cost
-        if output_tokens > 0:
-            output_cost = (output_tokens / 1_000_000) * GEMINI_20_FLASH_OUTPUT_PRICE
-            
+            input_price = tier2["input"]
+            cached_price = tier2.get("cached_input", tier2["input"] * 0.1) # Default to 10% if not set
     else:
-        # その他のモデル（従来の推定料金を使用）
-        price_per_million = GEMINI_25_FLASH_INPUT_PRICE if input_tokens <= TOKEN_THRESHOLD_200K else GEMINI_25_PRO_INPUT_PRICE_TIER2
-        non_cached_cost = (non_cached_input_tokens / 1_000_000) * price_per_million
-        cached_cost = (cached_tokens / 1_000_000) * price_per_million * CACHED_TOKEN_DISCOUNT
-        input_cost = non_cached_cost + cached_cost
+        input_price = pricing.get("input", 0.0)
+        cached_price = pricing.get("cached_input", input_price * 0.1) # Default to 10% if not set
+    
+    # 入力コスト計算
+    non_cached_cost = (non_cached_input_tokens / 1_000_000) * input_price
+    cached_cost = (cached_tokens / 1_000_000) * cached_price
+    input_cost = non_cached_cost + cached_cost
+    
+    # 出力コスト計算
+    if output_tokens > 0:
+        output_price = 0.0
         
-        if output_tokens > 0:
-            output_price = GEMINI_25_FLASH_OUTPUT_NON_THINKING_PRICE if output_tokens <= TOKEN_THRESHOLD_200K else GEMINI_25_PRO_OUTPUT_PRICE_TIER2
-            output_cost = (output_tokens / 1_000_000) * output_price
+        # Thinking価格のチェック
+        if has_thinking and "output_thinking" in pricing:
+            output_price = pricing["output_thinking"]
+        elif "tier1" in pricing:
+            # Tier制の場合 (Inputトークン数に基づく)
+            tier1 = pricing["tier1"]
+            tier2 = pricing["tier2"]
+            limit = tier1.get("limit", 200000)
+            
+            if input_tokens <= limit:
+                output_price = tier1["output"]
+            else:
+                output_price = tier2["output"]
+        else:
+            output_price = pricing.get("output", 0.0)
+            
+        output_cost = (output_tokens / 1_000_000) * output_price
 
     total_cost = input_cost + output_cost
     return input_cost, output_cost, total_cost
@@ -212,29 +213,29 @@ def setup_gen_ai_env():
 def calculate_cost(input_tokens: int | None, output_tokens: int | None) -> tuple[float | None, float | None, float | None]:
     """
     Calculates the estimated input, output, and total costs based on token counts.
+    NOTE: This function uses default pricing. Use calculate_cost_accurate with model_name for better accuracy.
 
     Returns:
         A tuple containing (input_cost, output_cost, total_cost).
-        Costs are None if input_tokens is None. output_cost is 0 if output_tokens is None.
     """
     if input_tokens is None:
-        # If input tokens are unknown, we can't calculate any cost reliably.
         return None, None, None
+
+    # デフォルト価格設定を使用
+    config = get_config()
+    pricing = config.get("model_pricing", {}).get("default", {"input": 0.0, "output": 0.0})
+    input_price = pricing.get("input", 0.0)
+    output_price = pricing.get("output", 0.0)
 
     input_cost = 0.0
     if input_tokens > 0:
-        price_per_million = GEMINI_25_FLASH_INPUT_PRICE if input_tokens <= TOKEN_THRESHOLD_200K else GEMINI_25_PRO_INPUT_PRICE_TIER2
-        input_cost = (input_tokens / 1_000_000) * price_per_million
+        input_cost = (input_tokens / 1_000_000) * input_price
 
     output_cost = 0.0
     if output_tokens is not None and output_tokens > 0:
-        # Assuming the same threshold applies to output tokens
-        price_per_million = GEMINI_25_FLASH_OUTPUT_NON_THINKING_PRICE if output_tokens <= TOKEN_THRESHOLD_200K else GEMINI_25_PRO_OUTPUT_PRICE_TIER2
-        output_cost = (output_tokens / 1_000_000) * price_per_million
-    # If output_tokens is None but input_tokens is known, output_cost remains 0.
+        output_cost = (output_tokens / 1_000_000) * output_price
 
     total_cost = input_cost + output_cost
-    # Return individual costs and the total
     return input_cost, output_cost, total_cost
 
 # --- API Client Function ---

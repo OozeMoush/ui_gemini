@@ -3,6 +3,7 @@
   "vertex_ai_location": "global",
   "root_directory": "",
   "available_models": [
+    "gemini-3-pro-preview",
     "gemini-2.5-pro",
     "gemini-2.5-flash",
     "gemini-2.0-flash",
@@ -15,6 +16,21 @@
   "default_temperature": 0.1,
   "default_max_output_tokens": 65535,
   "default_system_prompt": "",
+  "exchange_rate": 155.0,
+  "model_pricing": {
+    "default": { "input": 1.25, "output": 10.0, "cached_input": 0.125 },
+    "gemini-2.5-flash": { "input": 0.15, "output": 0.60, "output_thinking": 3.50, "cached_input": 0.015 },
+    "gemini-2.5-pro": {
+      "tier1": { "limit": 200000, "input": 1.25, "output": 10.0, "cached_input": 0.125 },
+      "tier2": { "input": 2.5, "output": 15.0, "cached_input": 0.25 }
+    },
+    "gemini-2.0-flash": { "input": 0.15, "output": 0.60, "cached_input": 0.015 },
+    "gemini-2.0-flash-lite": { "input": 0.075, "output": 0.30, "cached_input": 0.0075 },
+    "gemini-3-pro-preview": {
+      "tier1": { "limit": 200000, "input": 2.00, "output": 12.00, "cached_input": 0.20 },
+      "tier2": { "input": 4.00, "output": 18.00, "cached_input": 0.40 }
+    }
+  },
   "system_prompt_templates": {
     "なし": "",
     "専門分析家": "あなたは専門知識を持つ分析家です。質問に対して段階的に思考し、以下の手順で回答してください：\n1. 問題の要点を整理\n2. 関連する専門知識を考慮\n3. 複数の視点から検討\n4. 根拠を示して結論を導出\n\n日本語で丁寧に説明し、必要に応じて具体例も提示してください。",
