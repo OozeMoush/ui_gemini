@@ -50,7 +50,7 @@ file_checkboxes: dict[ft.Checkbox, str] = {}
 file_explorer_controls = ft.Column(scroll=ft.ScrollMode.ADAPTIVE, expand=True, spacing=0)
 
 # --- Other UI Components ---
-chat_history_display = ft.ListView(expand=True, spacing=10)
+chat_history_display = ft.ListView(expand=True, spacing=10, bgcolor=ft.Colors.GREY_900)
 user_input = ft.TextField(hint_text="Ctrl+Enter to send...", multiline=True, min_lines=2, max_lines=5, shift_enter=True, expand=True)
 send_button = ft.IconButton(ft.Icons.SEND_ROUNDED, tooltip="Send")
 cancel_button = ft.IconButton(ft.Icons.CANCEL_ROUNDED, tooltip="Cancel sending", visible=False, icon_color=ft.Colors.ERROR)
