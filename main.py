@@ -569,7 +569,7 @@ def main(page: ft.Page):
             auto_follow_links=True, 
             on_tap_link=lambda e: page.launch_url(e.data)
         )
-        gemini_response_container = ft.Container(content=gemini_response_md, padding=ft.padding.only(bottom=10), expand=True, width=None, bgcolor=ft.Colors.GREY_900)
+        gemini_response_container = ft.Container(content=gemini_response_md, padding=ft.padding.only(bottom=10), width=None)
         response_row = ft.Row([gemini_response_container], vertical_alignment=ft.CrossAxisAlignment.START, wrap=True)
         chat_history_display.controls.append(response_row)
         scroll_to_bottom(); page.update()
@@ -1293,7 +1293,7 @@ def main(page: ft.Page):
         chat_history_display,  # 従来のチャット表示に戻す
         ft.Row([user_input, send_button, cancel_button, reset_button], alignment=ft.MainAxisAlignment.END), 
         status_bar
-    ], expand=True), expand=True, padding=10, bgcolor=ft.Colors.GREY_900)
+    ], expand=True), expand=True, padding=10)
     
     # リサイズ可能な区切り線
     resize_divider_container = ft.Container(
