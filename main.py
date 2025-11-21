@@ -30,6 +30,7 @@ from vertex_ai_client import generate_gemini_response, calculate_cost
 from conversation_manager import ConversationManager
 # Import common types from vertex_ai_client
 from vertex_ai_client import Part, Content
+from model_capabilities import clamp_thinking_budget, get_model_capabilities
 
 config = config_manager.get_config()
 
@@ -628,15 +629,25 @@ def main(page: ft.Page):
                 "max_output_tokens": selected_max_tokens
             }
 
-            # Thinking設定を取得（表示はしないが機能は有効）
+            # Thinking設定を取得（モデル対応状況を考慮）
             thinking_auto = thinking_auto_budget_switch.value
-            if thinking_auto:
+            capabilities = get_model_capabilities(selected_model_name)
+            thinking_supported = capabilities.supports_thinking
+
+            if not thinking_supported:
+                if thinking_auto or (thinking_budget_slider.value and thinking_budget_slider.value > 0):
+                    logging.info(f"Thinkingは{selected_model_name}ではサポートされません。リクエストから除外します。")
+                thinking_auto = False
+                thinking_budget = 0
+            elif thinking_auto:
                 # 自動バジェット：-1を送信
                 thinking_budget = -1
-                logging.debug(f"自動思考バジェット使用: -1")
+                logging.debug("自動思考バジェット使用: -1")
             else:
-                # 手動バジェット：UI設定値を使用
-                thinking_budget = int(thinking_budget_slider.value)
+                # 手動バジェット：UI設定値を使用（範囲を強制）
+                thinking_budget = clamp_thinking_budget(selected_model_name, thinking_budget_slider.value)
+                if capabilities.force_thinking and thinking_budget <= 0:
+                    thinking_budget = max(capabilities.thinking_min_budget, 1)
                 logging.debug(f"手動思考バジェット値: {thinking_budget}")
 
             status_bar.value = f"Sending to {selected_model_name}..."; page.update()
@@ -646,7 +657,7 @@ def main(page: ft.Page):
                 contents=conversation_history + [current_content], generation_config=generation_config,
                 safety_settings={}, stream_update_callback=stream_callback,
                 thinking_budget=thinking_budget,  # 自動(-1)または手動設定値
-                thinking_auto_budget=thinking_auto  # UI設定を使用
+                thinking_auto_budget=thinking_auto  # UI設定を使用（非対応モデルはFalse）
             )
 
             # 入力・出力情報を統合して表示

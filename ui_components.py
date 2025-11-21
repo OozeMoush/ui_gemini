@@ -5,6 +5,7 @@ import os
 import re
 from config_manager import get_config
 from vertex_ai_client import Content
+from model_capabilities import clamp_thinking_budget, get_model_capabilities
 
 config = get_config()
 
@@ -141,87 +142,88 @@ def format_thinking_display(thinking_text: str) -> str:
 
 def update_thinking_budget_label(e):
     """Update thinking budget label when slider changes"""
+    if thinking_budget_slider.disabled:
+        return
     thinking_budget_label.value = str(int(e.control.value))
     try:
         thinking_budget_label.update()
-    except:
+    except Exception:
         pass
 
 def update_thinking_controls(e):
     """Update thinking controls when auto budget switch changes"""
-    is_auto = thinking_auto_budget_switch.value
-    # 自動バジェットがONの時はスライダーを無効化
-    thinking_budget_slider.disabled = is_auto
-    thinking_budget_label.disabled = is_auto
-    if is_auto:
-        thinking_budget_label.value = "Auto"
-    else:
-        thinking_budget_label.value = str(int(thinking_budget_slider.value))
-    try:
-        thinking_budget_slider.update()
-        thinking_budget_label.update()
-    except:
-        pass
+    profile = get_model_capabilities(model_dropdown.value)
 
-def update_thinking_for_model(e=None):
-    """モデル変更時に思考制御を更新"""
-    if not model_dropdown.value:
-        return
-    
-    model_name = model_dropdown.value.lower()
-    is_flash_model = "flash" in model_name
-    is_pro_model = "pro" in model_name
-    is_flash_lite = "flash-lite" in model_name
-    
-    if is_pro_model:
-        # Gemini 2.5 Pro: 128-32768トークン、思考無効化不可
-        thinking_budget_slider.min = 128
-        thinking_budget_slider.max = 32768
-        thinking_budget_slider.divisions = 32
-        thinking_budget_slider.tooltip = "思考バジェット (128-32768, Proでは思考無効化不可, -1=自動)"
-        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化（Proモデル推奨）"
-        
-        # 現在値が範囲外の場合は調整
-        if thinking_budget_slider.value < 128:
-            thinking_budget_slider.value = 8192  # デフォルト値
-            
-    elif is_flash_lite:
-        # Gemini 2.5 Flash-Lite: 512-24576トークン
-        thinking_budget_slider.min = 0  # 0で無効化可能
-        thinking_budget_slider.max = 24576
-        thinking_budget_slider.divisions = 24
-        thinking_budget_slider.tooltip = "思考バジェット (0=無効, 512-24576, -1=自動)"
-        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化（Flash-Lite）"
-        
-    elif is_flash_model:
-        # Gemini 2.5 Flash: 1-24576トークン
-        thinking_budget_slider.min = 0  # 0で無効化可能
-        thinking_budget_slider.max = 24576
-        thinking_budget_slider.divisions = 24
-        thinking_budget_slider.tooltip = "思考バジェット (0=無効, 1-24576, -1=自動)"
-        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化（Flashモデル）"
-        
+    if not profile.supports_thinking:
+        thinking_auto_budget_switch.value = False
+        thinking_auto_budget_switch.disabled = True
+        thinking_budget_slider.disabled = True
+        thinking_budget_label.disabled = True
+        thinking_budget_label.value = "N/A"
     else:
-        # その他のモデル：デフォルト制限
-        thinking_budget_slider.min = 0
-        thinking_budget_slider.max = 8192
-        thinking_budget_slider.divisions = 8
-        thinking_budget_slider.tooltip = "思考バジェット (0=無効, モデルによってはサポートされない場合があります)"
-        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化"
-    
-    # ラベル更新
-    if thinking_auto_budget_switch.value:
-        thinking_budget_label.value = "Auto"
-    else:
-        thinking_budget_label.value = str(int(thinking_budget_slider.value))
-    
-    # UIを更新
+        thinking_auto_budget_switch.disabled = False
+        thinking_budget_label.disabled = False
+        is_auto = thinking_auto_budget_switch.value
+        thinking_budget_slider.disabled = is_auto
+        if is_auto:
+            thinking_budget_label.value = "Auto"
+        else:
+            thinking_budget_slider.value = clamp_thinking_budget(
+                model_dropdown.value, thinking_budget_slider.value
+            )
+            thinking_budget_label.value = str(int(thinking_budget_slider.value))
+
     try:
         thinking_budget_slider.update()
         thinking_budget_label.update()
         thinking_auto_budget_switch.update()
-    except:
+    except Exception:
         pass
+
+def update_thinking_for_model(e=None):
+    """モデル変更時に思考制御を更新"""
+    model_name = model_dropdown.value
+    profile = get_model_capabilities(model_name)
+
+    if not profile.supports_thinking:
+        thinking_budget_slider.min = 0
+        thinking_budget_slider.max = 0
+        thinking_budget_slider.divisions = 1
+        thinking_budget_slider.value = 0
+        thinking_budget_slider.tooltip = profile.thinking_tooltip
+        thinking_budget_slider.disabled = True
+
+        thinking_budget_label.value = "N/A"
+        thinking_budget_label.disabled = True
+
+        thinking_auto_budget_switch.value = False
+        thinking_auto_budget_switch.disabled = True
+        thinking_auto_budget_switch.tooltip = "このモデルでは思考バジェットを使用できません"
+    else:
+        thinking_budget_slider.disabled = False
+        thinking_budget_label.disabled = False
+        thinking_auto_budget_switch.disabled = False
+
+        thinking_budget_slider.min = profile.thinking_min_budget
+        thinking_budget_slider.max = profile.thinking_max_budget
+        thinking_budget_slider.divisions = max(profile.thinking_divisions, 1)
+        thinking_budget_slider.value = clamp_thinking_budget(model_name, thinking_budget_slider.value)
+        thinking_budget_slider.tooltip = profile.thinking_tooltip
+        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化"
+
+        if thinking_auto_budget_switch.value:
+            thinking_budget_label.value = "Auto"
+        else:
+            thinking_budget_label.value = str(int(thinking_budget_slider.value))
+
+    try:
+        thinking_budget_slider.update()
+        thinking_budget_label.update()
+        thinking_auto_budget_switch.update()
+    except Exception:
+        pass
+
+    update_thinking_controls(None)
 
 def load_system_prompt_template(e):
     """Load selected system prompt template into the text field"""

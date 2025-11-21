@@ -4,6 +4,7 @@ import os
 from google import genai
 from google.genai.types import GenerateContentConfig, ThinkingConfig, HttpOptions
 from config_manager import get_config
+from model_capabilities import get_model_capabilities
 
 # リトライ設定
 MAX_RETRIES = 3  # 最大リトライ回数
@@ -367,13 +368,18 @@ def generate_gemini_response(
         config_kwargs = {}
         
         # Thinking設定 - モデル別に対応
-        thinking_enabled = thinking_budget != 0  # 0以外で有効（-1も含む）
+        capabilities = get_model_capabilities(model_name)
+        thinking_supported = capabilities.supports_thinking
+        thinking_enabled = thinking_supported and thinking_budget != 0  # 0以外で有効（-1も含む）
         has_thinking = thinking_enabled
-        
-        model_lower = model_name.lower()
-        is_flash_model = "flash" in model_lower
-        is_pro_model = "pro" in model_lower
-        
+
+        if thinking_budget != 0 and not thinking_supported:
+            logging.info(f"Thinkingはモデル '{model_name}' でサポートされていません。thinking_config をスキップします。")
+            thinking_budget = 0
+            thinking_auto_budget = False
+            thinking_enabled = False
+            has_thinking = False
+
         if thinking_enabled:
             thinking_config = {"include_thoughts": True}
             
@@ -388,7 +394,7 @@ def generate_gemini_response(
             
             config_kwargs["thinking_config"] = ThinkingConfig(**thinking_config)
         else:
-            logging.info("Thinking disabled (budget = 0)")
+            logging.info("Thinking disabled (budget = 0 or unsupported)")
         
         # Generation config
         if generation_config:
