@@ -18,6 +18,7 @@ from ui_components import (
     conversation_history,
     is_sending, cancel_requested,
     thinking_budget_slider, thinking_budget_label, thinking_auto_budget_switch,
+    thinking_level_dropdown,
     system_prompt_template_dropdown,
     # Session management components
     session_dropdown, new_session_name_field, create_session_button,
@@ -629,15 +630,27 @@ def main(page: ft.Page):
             }
 
             # Thinking設定を取得（表示はしないが機能は有効）
-            thinking_auto = thinking_auto_budget_switch.value
-            if thinking_auto:
-                # 自動バジェット：-1を送信
-                thinking_budget = -1
-                logging.debug(f"自動思考バジェット使用: -1")
+            # モデルがGemini 3かどうかを判定
+            is_gemini3 = "gemini-3" in selected_model_name.lower()
+            
+            if is_gemini3:
+                # Gemini 3の場合はlevelを使用
+                thinking_level = thinking_level_dropdown.value
+                thinking_budget = 0  # Gemini 3ではbudgetは使用しない
+                thinking_auto = False
+                logging.debug(f"Gemini 3: Thinking level: {thinking_level}")
             else:
-                # 手動バジェット：UI設定値を使用
-                thinking_budget = int(thinking_budget_slider.value)
-                logging.debug(f"手動思考バジェット値: {thinking_budget}")
+                # 他のモデルはbudget方式
+                thinking_level = None
+                thinking_auto = thinking_auto_budget_switch.value
+                if thinking_auto:
+                    # 自動バジェット：-1を送信
+                    thinking_budget = -1
+                    logging.debug(f"自動思考バジェット使用: -1")
+                else:
+                    # 手動バジェット：UI設定値を使用
+                    thinking_budget = int(thinking_budget_slider.value)
+                    logging.debug(f"手動思考バジェット値: {thinking_budget}")
 
             status_bar.value = f"Sending to {selected_model_name}..."; page.update()
 
@@ -646,7 +659,8 @@ def main(page: ft.Page):
                 contents=conversation_history + [current_content], generation_config=generation_config,
                 safety_settings={}, stream_update_callback=stream_callback,
                 thinking_budget=thinking_budget,  # 自動(-1)または手動設定値
-                thinking_auto_budget=thinking_auto  # UI設定を使用
+                thinking_auto_budget=thinking_auto,  # UI設定を使用
+                thinking_level=thinking_level  # Gemini 3用のlevel
             )
 
             # 入力・出力情報を統合して表示
@@ -883,6 +897,7 @@ def main(page: ft.Page):
             max_tokens_field
         ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=5, wrap=False), 
         ft.Row([
+            thinking_level_dropdown,  # Gemini 3用のlevel設定（Gemini 3選択時のみ表示）
             thinking_auto_budget_switch,  # 自動バジェットスイッチ
             ft.VerticalDivider(width=5),
             ft.Text("Budget:", width=50, tooltip="思考バジェット (0=無効)", color=ft.Colors.ON_SURFACE),

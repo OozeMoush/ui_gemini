@@ -248,6 +248,7 @@ def generate_gemini_response(
     stream_update_callback,
     thinking_budget: int = 0,  # 0 = 思考無効、それ以外 = 思考有効（バジェット）
     thinking_auto_budget: bool = False,  # 自動バジェット設定
+    thinking_level: str = None,  # Gemini 3用のthinking level（"low", "medium", "high"）
     ):
     """
     Sends request to Vertex AI Gemini model using Google Gen AI SDK and streams the response.
@@ -367,28 +368,50 @@ def generate_gemini_response(
         config_kwargs = {}
         
         # Thinking設定 - モデル別に対応
-        thinking_enabled = thinking_budget != 0  # 0以外で有効（-1も含む）
-        has_thinking = thinking_enabled
-        
         model_lower = model_name.lower()
+        is_gemini3 = "gemini-3" in model_lower
         is_flash_model = "flash" in model_lower
         is_pro_model = "pro" in model_lower
         
-        if thinking_enabled:
-            thinking_config = {"include_thoughts": True}
-            
-            if thinking_budget == -1 or thinking_auto_budget:
-                # 自動バジェット設定（-1で自動制御）
-                logging.info(f"Using automatic thinking budget (-1) for {model_name}")
-                # thinking_budgetは設定しない（デフォルトで自動）
-            elif thinking_budget > 0:
-                # 手動バジェット設定
-                thinking_config["thinking_budget"] = thinking_budget
-                logging.info(f"Thinking enabled with manual budget: {thinking_budget} for {model_name}")
-            
-            config_kwargs["thinking_config"] = ThinkingConfig(**thinking_config)
+        # Gemini 3の場合はthinking_levelを使用
+        if is_gemini3:
+            if thinking_level:
+                thinking_config = {
+                    "include_thoughts": True,
+                    "thinking_level": thinking_level
+                }
+                config_kwargs["thinking_config"] = ThinkingConfig(**thinking_config)
+                has_thinking = True
+                logging.info(f"Gemini 3: Thinking enabled with level: {thinking_level}")
+            else:
+                # デフォルトでmediumレベル
+                thinking_config = {
+                    "include_thoughts": True,
+                    "thinking_level": "medium"
+                }
+                config_kwargs["thinking_config"] = ThinkingConfig(**thinking_config)
+                has_thinking = True
+                logging.info(f"Gemini 3: Thinking enabled with default level: medium")
         else:
-            logging.info("Thinking disabled (budget = 0)")
+            # 他のモデルはbudget方式
+            thinking_enabled = thinking_budget != 0  # 0以外で有効（-1も含む）
+            has_thinking = thinking_enabled
+            
+            if thinking_enabled:
+                thinking_config = {"include_thoughts": True}
+                
+                if thinking_budget == -1 or thinking_auto_budget:
+                    # 自動バジェット設定（-1で自動制御）
+                    logging.info(f"Using automatic thinking budget (-1) for {model_name}")
+                    # thinking_budgetは設定しない（デフォルトで自動）
+                elif thinking_budget > 0:
+                    # 手動バジェット設定
+                    thinking_config["thinking_budget"] = thinking_budget
+                    logging.info(f"Thinking enabled with manual budget: {thinking_budget} for {model_name}")
+                
+                config_kwargs["thinking_config"] = ThinkingConfig(**thinking_config)
+            else:
+                logging.info("Thinking disabled (budget = 0)")
         
         # Generation config
         if generation_config:
