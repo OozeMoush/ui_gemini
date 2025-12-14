@@ -13,9 +13,9 @@
     "gemini-1.5-flash-8b-001"
   ],
   "default_model": "gemini-2.5-pro",
-  "default_temperature": 0.1,
+  "default_temperature": 1.0,
   "default_max_output_tokens": 65535,
-  "default_system_prompt": "",
+  "default_system_prompt": "日本語で回答してください。",
   "exchange_rate": 155.0,
   "model_pricing": {
     "default": { "input": 1.25, "output": 10.0, "cached_input": 0.125 },

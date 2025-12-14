@@ -41,7 +41,28 @@ thinking_budget_slider = ft.Slider(min=0, max=24576, divisions=24, label="{value
 thinking_budget_label = ft.Text("8192", width=60)
 thinking_auto_budget_switch = ft.Switch(label="自動バジェット", value=False, tooltip="思考バジェットの自動最適化を使用")
 
+# Gemini 3.0 Pro用のthinking_level選択
+thinking_level_dropdown = ft.Dropdown(
+    label="思考レベル",
+    options=[
+        ft.dropdown.Option("HIGH", "HIGH"),
+        ft.dropdown.Option("LOW", "LOW")
+    ],
+    value="HIGH",
+    tooltip="思考レベル (HIGH=高深度推論, LOW=低レイテンシ)",
+    width=150,
+    visible=False  # デフォルトでは非表示（モデルに応じて表示/非表示を切り替え）
+)
+
 # 思考表示スイッチは削除（バジェットが0でない場合は常に表示）
+
+# --- Grounding Controls ---
+grounding_config = config.get("grounding", {})
+grounding_switch = ft.Switch(
+    label="グラウンディング (Google Search)",
+    value=grounding_config.get("enabled", False),
+    tooltip="Google Search Toolを使用して最新の情報を検索"
+)
 
 # --- File Explorer Components (Reverting to simple Column) ---
 # Use dictionary to track checkboxes and their corresponding file paths
@@ -172,54 +193,80 @@ def update_thinking_for_model(e=None):
     is_flash_model = "flash" in model_name
     is_pro_model = "pro" in model_name
     is_flash_lite = "flash-lite" in model_name
+    is_gemini_3_pro = "3-pro" in model_name or "gemini-3-pro" in model_name
     
-    if is_pro_model:
-        # Gemini 2.5 Pro: 128-32768トークン、思考無効化不可
-        thinking_budget_slider.min = 128
-        thinking_budget_slider.max = 32768
-        thinking_budget_slider.divisions = 32
-        thinking_budget_slider.tooltip = "思考バジェット (128-32768, Proでは思考無効化不可, -1=自動)"
-        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化（Proモデル推奨）"
+    if is_gemini_3_pro:
+        # Gemini 3.0 Pro: thinking_levelを使用
+        # バジェットスライダーを非表示
+        thinking_budget_slider.visible = False
+        thinking_budget_label.visible = False
+        thinking_auto_budget_switch.visible = False
+        # thinking_levelドロップダウンを表示
+        thinking_level_dropdown.visible = True
+        thinking_level_dropdown.tooltip = "思考レベル (HIGH=高深度推論, LOW=低レイテンシ)"
+    else:
+        # その他のモデル: thinking_budgetを使用
+        # thinking_levelドロップダウンを非表示
+        thinking_level_dropdown.visible = False
+        # バジェットスライダーを表示
+        thinking_budget_slider.visible = True
+        thinking_budget_label.visible = True
+        thinking_auto_budget_switch.visible = True
         
-        # 現在値が範囲外の場合は調整
-        if thinking_budget_slider.value < 128:
-            thinking_budget_slider.value = 8192  # デフォルト値
+        if is_pro_model:
+            # Gemini 2.5 Pro: 128-32768トークン、思考無効化不可
+            thinking_budget_slider.min = 128
+            thinking_budget_slider.max = 32768
+            thinking_budget_slider.divisions = 32
+            thinking_budget_slider.tooltip = "思考バジェット (128-32768, Proでは思考無効化不可, -1=自動)"
+            thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化（Proモデル推奨）"
             
-    elif is_flash_lite:
-        # Gemini 2.5 Flash-Lite: 512-24576トークン
-        thinking_budget_slider.min = 0  # 0で無効化可能
-        thinking_budget_slider.max = 24576
-        thinking_budget_slider.divisions = 24
-        thinking_budget_slider.tooltip = "思考バジェット (0=無効, 512-24576, -1=自動)"
-        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化（Flash-Lite）"
+            # 現在値が範囲外の場合は調整
+            if thinking_budget_slider.value < 128:
+                thinking_budget_slider.value = 8192  # デフォルト値
+                
+        elif is_flash_lite:
+            # Gemini 2.5 Flash-Lite: 512-24576トークン
+            thinking_budget_slider.min = 0  # 0で無効化可能
+            thinking_budget_slider.max = 24576
+            thinking_budget_slider.divisions = 24
+            thinking_budget_slider.tooltip = "思考バジェット (0=無効, 512-24576, -1=自動)"
+            thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化（Flash-Lite）"
+            
+        elif is_flash_model:
+            # Gemini 2.5 Flash: 1-24576トークン
+            thinking_budget_slider.min = 0  # 0で無効化可能
+            thinking_budget_slider.max = 24576
+            thinking_budget_slider.divisions = 24
+            thinking_budget_slider.tooltip = "思考バジェット (0=無効, 1-24576, -1=自動)"
+            thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化（Flashモデル）"
+            
+        else:
+            # その他のモデル：デフォルト制限
+            thinking_budget_slider.min = 0
+            thinking_budget_slider.max = 8192
+            thinking_budget_slider.divisions = 8
+            thinking_budget_slider.tooltip = "思考バジェット (0=無効, モデルによってはサポートされない場合があります)"
+            thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化"
         
-    elif is_flash_model:
-        # Gemini 2.5 Flash: 1-24576トークン
-        thinking_budget_slider.min = 0  # 0で無効化可能
-        thinking_budget_slider.max = 24576
-        thinking_budget_slider.divisions = 24
-        thinking_budget_slider.tooltip = "思考バジェット (0=無効, 1-24576, -1=自動)"
-        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化（Flashモデル）"
-        
-    else:
-        # その他のモデル：デフォルト制限
-        thinking_budget_slider.min = 0
-        thinking_budget_slider.max = 8192
-        thinking_budget_slider.divisions = 8
-        thinking_budget_slider.tooltip = "思考バジェット (0=無効, モデルによってはサポートされない場合があります)"
-        thinking_auto_budget_switch.tooltip = "思考バジェットの自動最適化"
+        # ラベル更新
+        if thinking_auto_budget_switch.value:
+            thinking_budget_label.value = "Auto"
+        else:
+            thinking_budget_label.value = str(int(thinking_budget_slider.value))
     
-    # ラベル更新
-    if thinking_auto_budget_switch.value:
-        thinking_budget_label.value = "Auto"
-    else:
-        thinking_budget_label.value = str(int(thinking_budget_slider.value))
+    # グラウンディングスイッチは常に表示
+    if hasattr(grounding_switch, 'visible'):
+        grounding_switch.visible = True
     
     # UIを更新
     try:
         thinking_budget_slider.update()
         thinking_budget_label.update()
         thinking_auto_budget_switch.update()
+        thinking_level_dropdown.update()
+        if hasattr(grounding_switch, 'update'):
+            grounding_switch.update()
     except:
         pass
 

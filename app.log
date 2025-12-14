@@ -1378,3 +1378,436 @@ print("Hello World")
 2025-11-05 00:52:11,616 - WARNING - [main.py:352] Send: Gen AI not initialized.
 2025-11-05 00:52:17,739 - DEBUG - [__init__.py:53] Flet View process 2062063
 2025-11-05 00:52:17,740 - INFO - [main.py:1227] --- Application Finished ---
+2025-12-14 13:41:48,503 - INFO - [logger_setup.py:35] --- Logging Initialized (File: app.log, Console Level: INFO, MaxSize: 5.0MB, Backups: 3) ---
+2025-12-14 13:41:48,504 - INFO - [config_manager.py:26] Configuration loaded from config.json
+2025-12-14 13:41:49,377 - WARNING - [main.py:107] Vertex AI Project ID が設定されていません。config.json の 'vertex_ai_project_id' を設定してください。
+2025-12-14 13:41:49,377 - INFO - [main.py:1365] Starting Flet app...
+2025-12-14 13:41:49,378 - DEBUG - [selector_events.py:54] Using selector: EpollSelector
+2025-12-14 13:41:49,391 - INFO - [__init__.py:62] Starting Flet View app...
+2025-12-14 13:41:49,391 - INFO - [__init__.py:181] Looking for Flet bundle archive at: /home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/flet_desktop/app/flet-linux-amd64.tar.gz
+2025-12-14 13:41:49,391 - INFO - [__init__.py:185] Extracting Flet from archive to /home/hayvi/.flet/bin/flet-0.28.3
+2025-12-14 13:41:50,661 - INFO - [main.py:182] 日本語フォントを設定しました: /mnt/c/Windows/Fonts/meiryo.ttc (フォント名: Meiryo)
+2025-12-14 13:41:50,662 - INFO - [main.py:203] Main UI function started.
+2025-12-14 13:41:50,665 - WARNING - [main.py:1354] Set 'root_directory' in config.json
+2025-12-14 13:41:50,665 - INFO - [ui_components.py:106] Updating dropdown options: ['default'], current: default
+2025-12-14 13:41:50,666 - INFO - [ui_components.py:109] Dropdown value set to: default
+2025-12-14 13:41:50,669 - INFO - [main.py:942] セッション一覧を更新: ['default'], 現在のセッション: default
+2025-12-14 13:41:50,670 - INFO - [conversation_manager.py:98] 会話履歴を読み込みました: conversations/default.json (12 メッセージ)
+2025-12-14 13:41:50,672 - INFO - [main.py:273] 前回の会話を復元: 12 メッセージ
+2025-12-14 13:41:58,787 - INFO - [main.py:354] 会話履歴を 10 メッセージまでにリワインドしました
+2025-12-14 13:41:58,787 - INFO - [main.py:375] UIから 3 個のコントロールを削除しました（response_rowとトークン情報/ボタン行は保持）
+2025-12-14 13:41:58,787 - INFO - [conversation_manager.py:69] 会話履歴を保存しました: conversations/default.json (10 メッセージ)
+2025-12-14 13:41:58,787 - DEBUG - [main.py:287] 会話履歴を自動保存しました
+2025-12-14 13:42:57,961 - DEBUG - [__init__.py:53] Flet View process 5126
+2025-12-14 13:42:57,961 - INFO - [main.py:1367] --- Application Finished ---
+2025-12-14 13:47:47,373 - INFO - [logger_setup.py:35] --- Logging Initialized (File: app.log, Console Level: INFO, MaxSize: 5.0MB, Backups: 3) ---
+2025-12-14 13:47:47,374 - INFO - [config_manager.py:26] Configuration loaded from config.json
+2025-12-14 13:49:32,246 - INFO - [logger_setup.py:35] --- Logging Initialized (File: app.log, Console Level: INFO, MaxSize: 5.0MB, Backups: 3) ---
+2025-12-14 13:49:32,246 - INFO - [config_manager.py:26] Configuration loaded from config.json
+2025-12-14 13:49:32,710 - WARNING - [main.py:108] Vertex AI Project ID が設定されていません。config.json の 'vertex_ai_project_id' を設定してください。
+2025-12-14 13:49:32,710 - INFO - [main.py:1381] Starting Flet app...
+2025-12-14 13:49:32,710 - DEBUG - [selector_events.py:54] Using selector: EpollSelector
+2025-12-14 13:49:32,714 - INFO - [__init__.py:62] Starting Flet View app...
+2025-12-14 13:49:32,714 - INFO - [__init__.py:190] Flet View found in: /home/hayvi/.flet/bin/flet-0.28.3
+2025-12-14 13:49:34,122 - INFO - [main.py:183] 日本語フォントを設定しました: /mnt/c/Windows/Fonts/meiryo.ttc (フォント名: Meiryo)
+2025-12-14 13:49:34,122 - INFO - [main.py:204] Main UI function started.
+2025-12-14 13:49:34,124 - WARNING - [main.py:1370] Set 'root_directory' in config.json
+2025-12-14 13:49:34,125 - INFO - [ui_components.py:119] Updating dropdown options: ['default'], current: default
+2025-12-14 13:49:34,125 - INFO - [ui_components.py:122] Dropdown value set to: default
+2025-12-14 13:49:34,127 - INFO - [main.py:958] セッション一覧を更新: ['default'], 現在のセッション: default
+2025-12-14 13:49:34,127 - INFO - [conversation_manager.py:98] 会話履歴を読み込みました: conversations/default.json (10 メッセージ)
+2025-12-14 13:49:34,128 - INFO - [main.py:274] 前回の会話を復元: 10 メッセージ
+2025-12-14 13:49:58,769 - DEBUG - [__init__.py:53] Flet View process 7292
+2025-12-14 13:49:58,770 - INFO - [main.py:1383] --- Application Finished ---
+2025-12-14 13:50:35,455 - INFO - [logger_setup.py:35] --- Logging Initialized (File: app.log, Console Level: INFO, MaxSize: 5.0MB, Backups: 3) ---
+2025-12-14 13:50:35,456 - INFO - [config_manager.py:26] Configuration loaded from config.json
+2025-12-14 13:50:36,354 - WARNING - [main.py:108] Vertex AI Project ID が設定されていません。config.json の 'vertex_ai_project_id' を設定してください。
+2025-12-14 13:50:36,354 - INFO - [main.py:1381] Starting Flet app...
+2025-12-14 13:50:36,354 - DEBUG - [selector_events.py:54] Using selector: EpollSelector
+2025-12-14 13:50:36,356 - INFO - [__init__.py:62] Starting Flet View app...
+2025-12-14 13:50:36,356 - INFO - [__init__.py:190] Flet View found in: /home/hayvi/.flet/bin/flet-0.28.3
+2025-12-14 13:50:36,605 - INFO - [main.py:183] 日本語フォントを設定しました: /mnt/c/Windows/Fonts/meiryo.ttc (フォント名: Meiryo)
+2025-12-14 13:50:36,606 - INFO - [main.py:204] Main UI function started.
+2025-12-14 13:50:36,609 - WARNING - [main.py:1370] Set 'root_directory' in config.json
+2025-12-14 13:50:36,609 - INFO - [ui_components.py:119] Updating dropdown options: ['default'], current: default
+2025-12-14 13:50:36,609 - INFO - [ui_components.py:122] Dropdown value set to: default
+2025-12-14 13:50:36,611 - INFO - [main.py:958] セッション一覧を更新: ['default'], 現在のセッション: default
+2025-12-14 13:50:36,612 - INFO - [conversation_manager.py:98] 会話履歴を読み込みました: conversations/default.json (10 メッセージ)
+2025-12-14 13:50:36,614 - INFO - [main.py:274] 前回の会話を復元: 10 メッセージ
+2025-12-14 13:50:45,404 - WARNING - [main.py:434] Send: Gen AI not initialized.
+2025-12-14 13:50:51,199 - DEBUG - [__init__.py:53] Flet View process 7504
+2025-12-14 13:50:51,200 - INFO - [main.py:1383] --- Application Finished ---
+2025-12-14 13:51:19,325 - INFO - [logger_setup.py:35] --- Logging Initialized (File: app.log, Console Level: INFO, MaxSize: 5.0MB, Backups: 3) ---
+2025-12-14 13:51:19,326 - INFO - [config_manager.py:26] Configuration loaded from config.json
+2025-12-14 13:51:19,914 - INFO - [main.py:99] Gen AI initialized for project psychic-apex-383707 in global.
+2025-12-14 13:51:19,914 - INFO - [main.py:1381] Starting Flet app...
+2025-12-14 13:51:19,915 - DEBUG - [selector_events.py:54] Using selector: EpollSelector
+2025-12-14 13:51:19,917 - INFO - [__init__.py:62] Starting Flet View app...
+2025-12-14 13:51:19,918 - INFO - [__init__.py:190] Flet View found in: /home/hayvi/.flet/bin/flet-0.28.3
+2025-12-14 13:51:20,160 - INFO - [main.py:183] 日本語フォントを設定しました: /mnt/c/Windows/Fonts/meiryo.ttc (フォント名: Meiryo)
+2025-12-14 13:51:20,161 - INFO - [main.py:204] Main UI function started.
+2025-12-14 13:51:20,166 - WARNING - [main.py:1370] Set 'root_directory' in config.json
+2025-12-14 13:51:20,167 - INFO - [ui_components.py:119] Updating dropdown options: ['default'], current: default
+2025-12-14 13:51:20,167 - INFO - [ui_components.py:122] Dropdown value set to: default
+2025-12-14 13:51:20,168 - INFO - [main.py:958] セッション一覧を更新: ['default'], 現在のセッション: default
+2025-12-14 13:51:20,169 - INFO - [conversation_manager.py:98] 会話履歴を読み込みました: conversations/default.json (10 メッセージ)
+2025-12-14 13:51:20,170 - INFO - [main.py:274] 前回の会話を復元: 10 メッセージ
+2025-12-14 13:51:23,612 - DEBUG - [_default.py:329] Checking None for explicit credentials as part of auth process...
+2025-12-14 13:51:23,612 - DEBUG - [_default.py:299] Checking Cloud SDK credentials as part of auth process...
+2025-12-14 13:51:23,612 - DEBUG - [_default.py:305] Cloud SDK credentials not found on disk; not using them
+2025-12-14 13:51:35,542 - ERROR - [vertex_ai_client.py:126] Failed to get accurate token count: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+2025-12-14 13:51:35,550 - DEBUG - [main.py:642] Gemini 3.0 Pro: thinking_level=HIGH (high=True)
+2025-12-14 13:51:35,563 - INFO - [vertex_ai_client.py:317] Initialized Gen AI client for project: psychic-apex-383707, location: global
+2025-12-14 13:51:35,563 - INFO - [vertex_ai_client.py:323] Sending request to model: gemini-3-pro-preview
+2025-12-14 13:51:49,291 - ERROR - [vertex_ai_client.py:126] Failed to get accurate token count: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+2025-12-14 13:51:49,292 - INFO - [vertex_ai_client.py:327] Pre-calculated input tokens: 100
+2025-12-14 13:51:49,292 - INFO - [vertex_ai_client.py:337] Input Summary (model: gemini-3-pro-preview): System Prompt (len: 13), History+Prompt (11 items), Current Prompt (len: 6)
+2025-12-14 13:51:49,292 - INFO - [vertex_ai_client.py:390] Thinking enabled for gemini-3-pro-preview with level: high
+2025-12-14 13:51:49,292 - INFO - [vertex_ai_client.py:445] Added thinking_level=high to config dict (may not be used by SDK)
+2025-12-14 13:51:49,292 - INFO - [vertex_ai_client.py:468] Starting real-time streaming... (attempt 1/4)
+2025-12-14 13:51:49,292 - INFO - [models.py:5388] AFC is enabled with max remote calls: 10.
+2025-12-14 13:52:01,161 - ERROR - [vertex_ai_client.py:543] Error during streaming (non-retryable or max retries reached): Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+Traceback (most recent call last):
+  File "/home/hayvi/workspace/ui_gemini/vertex_ai_client.py", line 472, in generate_gemini_response
+    for chunk in response_stream:
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/models.py", line 5407, in generate_content_stream
+    for chunk in response:
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/models.py", line 4101, in _generate_content_stream
+    for response in self._api_client.request_streamed(
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/_api_client.py", line 1405, in request_streamed
+    session_response = self._request(http_request, http_options, stream=True)
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/_api_client.py", line 1224, in _request
+    return self._retry(self._request_once, http_request, stream)  # type: ignore[no-any-return]
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/tenacity/__init__.py", line 477, in __call__
+    do = self.iter(retry_state=retry_state)
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/tenacity/__init__.py", line 378, in iter
+    result = action(retry_state)
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/tenacity/__init__.py", line 420, in exc_check
+    raise retry_exc.reraise()
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/tenacity/__init__.py", line 187, in reraise
+    raise self.last_attempt.result()
+  File "/home/hayvi/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/home/hayvi/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/tenacity/__init__.py", line 480, in __call__
+    result = fn(*args, **kwargs)
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/_api_client.py", line 1167, in _request_once
+    http_request.headers['Authorization'] = f'Bearer {self._access_token()}'
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/_api_client.py", line 982, in _access_token
+    self._credentials, project = load_auth(project=self.project)
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/_api_client.py", line 184, in load_auth
+    credentials, loaded_project_id = google.auth.default(  # type: ignore[no-untyped-call]
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/auth/_default.py", line 739, in default
+    raise exceptions.DefaultCredentialsError(_CLOUD_SDK_MISSING_CREDENTIALS)
+google.auth.exceptions.DefaultCredentialsError: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+2025-12-14 13:52:01,164 - INFO - [vertex_ai_client.py:561] Stream finished. Response length: 0, Thinking length: 0
+2025-12-14 13:52:01,164 - INFO - [vertex_ai_client.py:589] Output: API Error - Streaming error: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+2025-12-14 13:52:01,165 - INFO - [vertex_ai_client.py:612] Estimated Total Cost: $0.000200 (Input: $0.000200 (100 tokens), Output: $0.000000 (None tokens - estimated))
+2025-12-14 13:52:01,165 - ERROR - [main.py:708] API Client Error: Streaming error: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+2025-12-14 13:52:01,166 - DEBUG - [main.py:833] ファイル選択をリセットしました
+2025-12-14 13:52:07,301 - DEBUG - [__init__.py:53] Flet View process 7735
+2025-12-14 13:52:07,301 - INFO - [main.py:1383] --- Application Finished ---
+2025-12-14 13:57:27,736 - INFO - [logger_setup.py:35] --- Logging Initialized (File: app.log, Console Level: INFO, MaxSize: 5.0MB, Backups: 3) ---
+2025-12-14 13:57:27,737 - INFO - [config_manager.py:26] Configuration loaded from config.json
+2025-12-14 13:57:28,250 - INFO - [main.py:99] Gen AI initialized for project psychic-apex-383707 in global.
+2025-12-14 13:57:28,250 - INFO - [main.py:1381] Starting Flet app...
+2025-12-14 13:57:28,250 - DEBUG - [selector_events.py:54] Using selector: EpollSelector
+2025-12-14 13:57:28,252 - INFO - [__init__.py:62] Starting Flet View app...
+2025-12-14 13:57:28,253 - INFO - [__init__.py:190] Flet View found in: /home/hayvi/.flet/bin/flet-0.28.3
+2025-12-14 13:57:28,561 - INFO - [main.py:183] 日本語フォントを設定しました: /mnt/c/Windows/Fonts/meiryo.ttc (フォント名: Meiryo)
+2025-12-14 13:57:28,562 - INFO - [main.py:204] Main UI function started.
+2025-12-14 13:57:28,565 - WARNING - [main.py:1370] Set 'root_directory' in config.json
+2025-12-14 13:57:28,566 - INFO - [ui_components.py:119] Updating dropdown options: ['default'], current: default
+2025-12-14 13:57:28,566 - INFO - [ui_components.py:122] Dropdown value set to: default
+2025-12-14 13:57:28,568 - INFO - [main.py:958] セッション一覧を更新: ['default'], 現在のセッション: default
+2025-12-14 13:57:28,568 - INFO - [conversation_manager.py:98] 会話履歴を読み込みました: conversations/default.json (10 メッセージ)
+2025-12-14 13:57:28,569 - INFO - [main.py:274] 前回の会話を復元: 10 メッセージ
+2025-12-14 13:57:39,696 - DEBUG - [_default.py:329] Checking None for explicit credentials as part of auth process...
+2025-12-14 13:57:39,696 - DEBUG - [_default.py:299] Checking Cloud SDK credentials as part of auth process...
+2025-12-14 13:57:39,696 - DEBUG - [_default.py:305] Cloud SDK credentials not found on disk; not using them
+2025-12-14 13:57:53,416 - ERROR - [vertex_ai_client.py:126] Failed to get accurate token count: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+2025-12-14 13:57:53,423 - DEBUG - [main.py:642] Gemini 3.0 Pro: thinking_level=HIGH (high=True)
+2025-12-14 13:57:53,437 - INFO - [vertex_ai_client.py:317] Initialized Gen AI client for project: psychic-apex-383707, location: global
+2025-12-14 13:57:53,438 - INFO - [vertex_ai_client.py:323] Sending request to model: gemini-3-pro-preview
+2025-12-14 13:58:05,406 - ERROR - [vertex_ai_client.py:126] Failed to get accurate token count: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+2025-12-14 13:58:05,406 - INFO - [vertex_ai_client.py:327] Pre-calculated input tokens: 100
+2025-12-14 13:58:05,406 - INFO - [vertex_ai_client.py:337] Input Summary (model: gemini-3-pro-preview): System Prompt (len: 13), History+Prompt (11 items), Current Prompt (len: 6)
+2025-12-14 13:58:05,406 - INFO - [vertex_ai_client.py:390] Thinking enabled for gemini-3-pro-preview with level: high
+2025-12-14 13:58:05,407 - INFO - [vertex_ai_client.py:445] Added thinking_level=high to config dict (may not be used by SDK)
+2025-12-14 13:58:05,407 - INFO - [vertex_ai_client.py:468] Starting real-time streaming... (attempt 1/4)
+2025-12-14 13:58:05,407 - INFO - [models.py:5388] AFC is enabled with max remote calls: 10.
+2025-12-14 13:58:17,453 - ERROR - [vertex_ai_client.py:543] Error during streaming (non-retryable or max retries reached): Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+Traceback (most recent call last):
+  File "/home/hayvi/workspace/ui_gemini/vertex_ai_client.py", line 472, in generate_gemini_response
+    for chunk in response_stream:
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/models.py", line 5407, in generate_content_stream
+    for chunk in response:
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/models.py", line 4101, in _generate_content_stream
+    for response in self._api_client.request_streamed(
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/_api_client.py", line 1405, in request_streamed
+    session_response = self._request(http_request, http_options, stream=True)
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/_api_client.py", line 1224, in _request
+    return self._retry(self._request_once, http_request, stream)  # type: ignore[no-any-return]
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/tenacity/__init__.py", line 477, in __call__
+    do = self.iter(retry_state=retry_state)
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/tenacity/__init__.py", line 378, in iter
+    result = action(retry_state)
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/tenacity/__init__.py", line 420, in exc_check
+    raise retry_exc.reraise()
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/tenacity/__init__.py", line 187, in reraise
+    raise self.last_attempt.result()
+  File "/home/hayvi/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/home/hayvi/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/tenacity/__init__.py", line 480, in __call__
+    result = fn(*args, **kwargs)
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/_api_client.py", line 1167, in _request_once
+    http_request.headers['Authorization'] = f'Bearer {self._access_token()}'
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/_api_client.py", line 982, in _access_token
+    self._credentials, project = load_auth(project=self.project)
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/_api_client.py", line 184, in load_auth
+    credentials, loaded_project_id = google.auth.default(  # type: ignore[no-untyped-call]
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/auth/_default.py", line 739, in default
+    raise exceptions.DefaultCredentialsError(_CLOUD_SDK_MISSING_CREDENTIALS)
+google.auth.exceptions.DefaultCredentialsError: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+2025-12-14 13:58:17,455 - INFO - [vertex_ai_client.py:561] Stream finished. Response length: 0, Thinking length: 0
+2025-12-14 13:58:17,455 - INFO - [vertex_ai_client.py:589] Output: API Error - Streaming error: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+2025-12-14 13:58:17,455 - INFO - [vertex_ai_client.py:612] Estimated Total Cost: $0.000200 (Input: $0.000200 (100 tokens), Output: $0.000000 (None tokens - estimated))
+2025-12-14 13:58:17,455 - ERROR - [main.py:708] API Client Error: Streaming error: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+2025-12-14 13:58:17,457 - DEBUG - [main.py:833] ファイル選択をリセットしました
+2025-12-14 13:59:55,040 - DEBUG - [__init__.py:53] Flet View process 9336
+2025-12-14 13:59:55,041 - INFO - [main.py:1383] --- Application Finished ---
+2025-12-14 13:59:57,847 - INFO - [logger_setup.py:35] --- Logging Initialized (File: app.log, Console Level: INFO, MaxSize: 5.0MB, Backups: 3) ---
+2025-12-14 13:59:57,847 - INFO - [config_manager.py:26] Configuration loaded from config.json
+2025-12-14 13:59:58,411 - INFO - [main.py:99] Gen AI initialized for project psychic-apex-383707 in global.
+2025-12-14 13:59:58,411 - INFO - [main.py:1381] Starting Flet app...
+2025-12-14 13:59:58,411 - DEBUG - [selector_events.py:54] Using selector: EpollSelector
+2025-12-14 13:59:58,413 - INFO - [__init__.py:62] Starting Flet View app...
+2025-12-14 13:59:58,414 - INFO - [__init__.py:190] Flet View found in: /home/hayvi/.flet/bin/flet-0.28.3
+2025-12-14 13:59:58,728 - INFO - [main.py:183] 日本語フォントを設定しました: /mnt/c/Windows/Fonts/meiryo.ttc (フォント名: Meiryo)
+2025-12-14 13:59:58,728 - INFO - [main.py:204] Main UI function started.
+2025-12-14 13:59:58,731 - WARNING - [main.py:1370] Set 'root_directory' in config.json
+2025-12-14 13:59:58,732 - INFO - [ui_components.py:119] Updating dropdown options: ['default'], current: default
+2025-12-14 13:59:58,732 - INFO - [ui_components.py:122] Dropdown value set to: default
+2025-12-14 13:59:58,735 - INFO - [main.py:958] セッション一覧を更新: ['default'], 現在のセッション: default
+2025-12-14 13:59:58,735 - INFO - [conversation_manager.py:98] 会話履歴を読み込みました: conversations/default.json (10 メッセージ)
+2025-12-14 13:59:58,736 - INFO - [main.py:274] 前回の会話を復元: 10 メッセージ
+2025-12-14 14:00:04,468 - DEBUG - [_default.py:329] Checking None for explicit credentials as part of auth process...
+2025-12-14 14:00:04,468 - DEBUG - [_default.py:299] Checking Cloud SDK credentials as part of auth process...
+2025-12-14 14:00:04,468 - DEBUG - [_default.py:305] Cloud SDK credentials not found on disk; not using them
+2025-12-14 14:00:17,801 - ERROR - [vertex_ai_client.py:126] Failed to get accurate token count: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+2025-12-14 14:00:17,808 - DEBUG - [main.py:642] Gemini 3.0 Pro: thinking_level=HIGH (high=True)
+2025-12-14 14:00:17,821 - INFO - [vertex_ai_client.py:317] Initialized Gen AI client for project: psychic-apex-383707, location: global
+2025-12-14 14:00:17,821 - INFO - [vertex_ai_client.py:323] Sending request to model: gemini-3-pro-preview
+2025-12-14 14:00:29,951 - ERROR - [vertex_ai_client.py:126] Failed to get accurate token count: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+2025-12-14 14:00:29,952 - INFO - [vertex_ai_client.py:327] Pre-calculated input tokens: 100
+2025-12-14 14:00:29,952 - INFO - [vertex_ai_client.py:337] Input Summary (model: gemini-3-pro-preview): System Prompt (len: 13), History+Prompt (11 items), Current Prompt (len: 5)
+2025-12-14 14:00:29,952 - INFO - [vertex_ai_client.py:390] Thinking enabled for gemini-3-pro-preview with level: high
+2025-12-14 14:00:29,952 - INFO - [vertex_ai_client.py:446] Added thinking_level=high to config using model_construct
+2025-12-14 14:00:29,952 - INFO - [vertex_ai_client.py:469] Starting real-time streaming... (attempt 1/4)
+2025-12-14 14:00:29,953 - INFO - [models.py:5388] AFC is enabled with max remote calls: 10.
+2025-12-14 14:00:43,588 - ERROR - [vertex_ai_client.py:544] Error during streaming (non-retryable or max retries reached): Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+Traceback (most recent call last):
+  File "/home/hayvi/workspace/ui_gemini/vertex_ai_client.py", line 473, in generate_gemini_response
+    for chunk in response_stream:
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/models.py", line 5407, in generate_content_stream
+    for chunk in response:
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/models.py", line 4101, in _generate_content_stream
+    for response in self._api_client.request_streamed(
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/_api_client.py", line 1405, in request_streamed
+    session_response = self._request(http_request, http_options, stream=True)
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/_api_client.py", line 1224, in _request
+    return self._retry(self._request_once, http_request, stream)  # type: ignore[no-any-return]
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/tenacity/__init__.py", line 477, in __call__
+    do = self.iter(retry_state=retry_state)
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/tenacity/__init__.py", line 378, in iter
+    result = action(retry_state)
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/tenacity/__init__.py", line 420, in exc_check
+    raise retry_exc.reraise()
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/tenacity/__init__.py", line 187, in reraise
+    raise self.last_attempt.result()
+  File "/home/hayvi/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/concurrent/futures/_base.py", line 451, in result
+    return self.__get_result()
+  File "/home/hayvi/.local/share/uv/python/cpython-3.10.19-linux-x86_64-gnu/lib/python3.10/concurrent/futures/_base.py", line 403, in __get_result
+    raise self._exception
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/tenacity/__init__.py", line 480, in __call__
+    result = fn(*args, **kwargs)
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/_api_client.py", line 1167, in _request_once
+    http_request.headers['Authorization'] = f'Bearer {self._access_token()}'
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/_api_client.py", line 982, in _access_token
+    self._credentials, project = load_auth(project=self.project)
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/genai/_api_client.py", line 184, in load_auth
+    credentials, loaded_project_id = google.auth.default(  # type: ignore[no-untyped-call]
+  File "/home/hayvi/workspace/ui_gemini/.venv/lib/python3.10/site-packages/google/auth/_default.py", line 739, in default
+    raise exceptions.DefaultCredentialsError(_CLOUD_SDK_MISSING_CREDENTIALS)
+google.auth.exceptions.DefaultCredentialsError: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+2025-12-14 14:00:43,590 - INFO - [vertex_ai_client.py:562] Stream finished. Response length: 0, Thinking length: 0
+2025-12-14 14:00:43,590 - INFO - [vertex_ai_client.py:590] Output: API Error - Streaming error: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+2025-12-14 14:00:43,590 - INFO - [vertex_ai_client.py:613] Estimated Total Cost: $0.000200 (Input: $0.000200 (100 tokens), Output: $0.000000 (None tokens - estimated))
+2025-12-14 14:00:43,590 - ERROR - [main.py:708] API Client Error: Streaming error: Your default credentials were not found. To set up Application Default Credentials, see https://cloud.google.com/docs/authentication/external/set-up-adc for more information.
+2025-12-14 14:00:43,592 - DEBUG - [main.py:833] ファイル選択をリセットしました
+2025-12-14 14:04:41,868 - DEBUG - [__init__.py:53] Flet View process 9670
+2025-12-14 14:04:41,870 - INFO - [main.py:1383] --- Application Finished ---
+2025-12-14 14:05:17,931 - INFO - [logger_setup.py:35] --- Logging Initialized (File: app.log, Console Level: INFO, MaxSize: 5.0MB, Backups: 3) ---
+2025-12-14 14:05:17,931 - INFO - [config_manager.py:26] Configuration loaded from config.json
+2025-12-14 14:05:18,570 - INFO - [vertex_ai_client.py:253] Using Application Default Credentials (ADC)
+2025-12-14 14:05:18,600 - INFO - [main.py:110] Gen AI initialized for project psychic-apex-383707 in global.
+2025-12-14 14:05:18,601 - INFO - [main.py:1392] Starting Flet app...
+2025-12-14 14:05:18,601 - DEBUG - [selector_events.py:54] Using selector: EpollSelector
+2025-12-14 14:05:18,605 - INFO - [__init__.py:62] Starting Flet View app...
+2025-12-14 14:05:18,605 - INFO - [__init__.py:190] Flet View found in: /home/hayvi/.flet/bin/flet-0.28.3
+2025-12-14 14:05:18,999 - INFO - [main.py:194] 日本語フォントを設定しました: /mnt/c/Windows/Fonts/meiryo.ttc (フォント名: Meiryo)
+2025-12-14 14:05:19,000 - INFO - [main.py:215] Main UI function started.
+2025-12-14 14:05:19,003 - WARNING - [main.py:1381] Set 'root_directory' in config.json
+2025-12-14 14:05:19,004 - INFO - [ui_components.py:119] Updating dropdown options: ['default'], current: default
+2025-12-14 14:05:19,004 - INFO - [ui_components.py:122] Dropdown value set to: default
+2025-12-14 14:05:19,008 - INFO - [main.py:969] セッション一覧を更新: ['default'], 現在のセッション: default
+2025-12-14 14:05:19,009 - INFO - [conversation_manager.py:98] 会話履歴を読み込みました: conversations/default.json (10 メッセージ)
+2025-12-14 14:05:19,011 - INFO - [main.py:285] 前回の会話を復元: 10 メッセージ
+2025-12-14 14:05:25,993 - DEBUG - [_default.py:329] Checking None for explicit credentials as part of auth process...
+2025-12-14 14:05:25,993 - DEBUG - [_default.py:299] Checking Cloud SDK credentials as part of auth process...
+2025-12-14 14:05:26,381 - DEBUG - [connectionpool.py:1049] Starting new HTTPS connection (1): oauth2.googleapis.com:443
+2025-12-14 14:05:26,535 - DEBUG - [connectionpool.py:544] https://oauth2.googleapis.com:443 "POST /token HTTP/1.1" 200 None
+2025-12-14 14:05:26,537 - DEBUG - [_trace.py:47] connect_tcp.started host='aiplatform.googleapis.com' port=443 local_address=None timeout=None socket_options=None
+2025-12-14 14:05:26,556 - DEBUG - [_trace.py:47] connect_tcp.complete return_value=<httpcore._backends.sync.SyncStream object at 0x72aaaae958a0>
+2025-12-14 14:05:26,556 - DEBUG - [_trace.py:47] start_tls.started ssl_context=<ssl.SSLContext object at 0x72aaaae542c0> server_hostname='aiplatform.googleapis.com' timeout=None
+2025-12-14 14:05:26,571 - DEBUG - [_trace.py:47] start_tls.complete return_value=<httpcore._backends.sync.SyncStream object at 0x72aaaae959c0>
+2025-12-14 14:05:26,571 - DEBUG - [_trace.py:47] send_request_headers.started request=<Request [b'POST']>
+2025-12-14 14:05:26,571 - DEBUG - [_trace.py:47] send_request_headers.complete
+2025-12-14 14:05:26,571 - DEBUG - [_trace.py:47] send_request_body.started request=<Request [b'POST']>
+2025-12-14 14:05:26,571 - DEBUG - [_trace.py:47] send_request_body.complete
+2025-12-14 14:05:26,571 - DEBUG - [_trace.py:47] receive_response_headers.started request=<Request [b'POST']>
+2025-12-14 14:05:27,289 - DEBUG - [_trace.py:47] receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'application/json; charset=UTF-8'), (b'Vary', b'Origin'), (b'Vary', b'X-Origin'), (b'Vary', b'Referer'), (b'Content-Encoding', b'gzip'), (b'Date', b'Sun, 14 Dec 2025 05:05:28 GMT'), (b'Server', b'scaffolding on HTTPServer2'), (b'X-XSS-Protection', b'0'), (b'X-Frame-Options', b'SAMEORIGIN'), (b'X-Content-Type-Options', b'nosniff'), (b'Alt-Svc', b'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000'), (b'Transfer-Encoding', b'chunked')])
+2025-12-14 14:05:27,290 - INFO - [_client.py:1025] HTTP Request: POST https://aiplatform.googleapis.com/v1/projects/psychic-apex-383707/locations/global/publishers/google/models/gemini-3-pro-preview:countTokens "HTTP/1.1 200 OK"
+2025-12-14 14:05:27,290 - DEBUG - [_trace.py:47] receive_response_body.started request=<Request [b'POST']>
+2025-12-14 14:05:27,298 - DEBUG - [_trace.py:47] receive_response_body.complete
+2025-12-14 14:05:27,299 - DEBUG - [_trace.py:47] response_closed.started
+2025-12-14 14:05:27,299 - DEBUG - [_trace.py:47] response_closed.complete
+2025-12-14 14:05:27,299 - INFO - [vertex_ai_client.py:123] Accurate token count - Input: 155 tokens
+2025-12-14 14:05:27,306 - DEBUG - [main.py:653] Gemini 3.0 Pro: thinking_level=HIGH (high=True)
+2025-12-14 14:05:27,308 - INFO - [vertex_ai_client.py:253] Using Application Default Credentials (ADC)
+2025-12-14 14:05:27,308 - INFO - [vertex_ai_client.py:368] Using Application Default Credentials (ADC) for authentication
+2025-12-14 14:05:27,320 - INFO - [vertex_ai_client.py:372] Initialized Gen AI client for project: psychic-apex-383707, location: global
+2025-12-14 14:05:27,320 - INFO - [vertex_ai_client.py:394] Sending request to model: gemini-3-pro-preview
+2025-12-14 14:05:27,748 - DEBUG - [connectionpool.py:1049] Starting new HTTPS connection (1): oauth2.googleapis.com:443
+2025-12-14 14:05:27,886 - DEBUG - [connectionpool.py:544] https://oauth2.googleapis.com:443 "POST /token HTTP/1.1" 200 None
+2025-12-14 14:05:27,887 - DEBUG - [_trace.py:47] connect_tcp.started host='aiplatform.googleapis.com' port=443 local_address=None timeout=None socket_options=None
+2025-12-14 14:05:27,897 - DEBUG - [_trace.py:47] connect_tcp.complete return_value=<httpcore._backends.sync.SyncStream object at 0x72aaaae96bf0>
+2025-12-14 14:05:27,897 - DEBUG - [_trace.py:47] start_tls.started ssl_context=<ssl.SSLContext object at 0x72aaaaf67ec0> server_hostname='aiplatform.googleapis.com' timeout=None
+2025-12-14 14:05:27,920 - DEBUG - [_trace.py:47] start_tls.complete return_value=<httpcore._backends.sync.SyncStream object at 0x72aaaae96a40>
+2025-12-14 14:05:27,920 - DEBUG - [_trace.py:47] send_request_headers.started request=<Request [b'POST']>
+2025-12-14 14:05:27,920 - DEBUG - [_trace.py:47] send_request_headers.complete
+2025-12-14 14:05:27,920 - DEBUG - [_trace.py:47] send_request_body.started request=<Request [b'POST']>
+2025-12-14 14:05:27,920 - DEBUG - [_trace.py:47] send_request_body.complete
+2025-12-14 14:05:27,920 - DEBUG - [_trace.py:47] receive_response_headers.started request=<Request [b'POST']>
+2025-12-14 14:05:28,522 - DEBUG - [_trace.py:47] receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'application/json; charset=UTF-8'), (b'Vary', b'Origin'), (b'Vary', b'X-Origin'), (b'Vary', b'Referer'), (b'Content-Encoding', b'gzip'), (b'Date', b'Sun, 14 Dec 2025 05:05:29 GMT'), (b'Server', b'scaffolding on HTTPServer2'), (b'X-XSS-Protection', b'0'), (b'X-Frame-Options', b'SAMEORIGIN'), (b'X-Content-Type-Options', b'nosniff'), (b'Alt-Svc', b'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000'), (b'Transfer-Encoding', b'chunked')])
+2025-12-14 14:05:28,523 - INFO - [_client.py:1025] HTTP Request: POST https://aiplatform.googleapis.com/v1/projects/psychic-apex-383707/locations/global/publishers/google/models/gemini-3-pro-preview:countTokens "HTTP/1.1 200 OK"
+2025-12-14 14:05:28,523 - DEBUG - [_trace.py:47] receive_response_body.started request=<Request [b'POST']>
+2025-12-14 14:05:28,524 - DEBUG - [_trace.py:47] receive_response_body.complete
+2025-12-14 14:05:28,524 - DEBUG - [_trace.py:47] response_closed.started
+2025-12-14 14:05:28,524 - DEBUG - [_trace.py:47] response_closed.complete
+2025-12-14 14:05:28,525 - INFO - [vertex_ai_client.py:123] Accurate token count - Input: 155 tokens
+2025-12-14 14:05:28,525 - INFO - [vertex_ai_client.py:398] Pre-calculated input tokens: 155
+2025-12-14 14:05:28,525 - INFO - [vertex_ai_client.py:408] Input Summary (model: gemini-3-pro-preview): System Prompt (len: 13), History+Prompt (11 items), Current Prompt (len: 6)
+2025-12-14 14:05:28,525 - INFO - [vertex_ai_client.py:461] Thinking enabled for gemini-3-pro-preview with level: high
+2025-12-14 14:05:28,525 - INFO - [vertex_ai_client.py:517] Added thinking_level=high to config using model_construct
+2025-12-14 14:05:28,526 - INFO - [vertex_ai_client.py:540] Starting real-time streaming... (attempt 1/4)
+2025-12-14 14:05:28,526 - INFO - [models.py:5388] AFC is enabled with max remote calls: 10.
+2025-12-14 14:05:28,527 - DEBUG - [_trace.py:47] send_request_headers.started request=<Request [b'POST']>
+2025-12-14 14:05:28,527 - DEBUG - [_trace.py:47] send_request_headers.complete
+2025-12-14 14:05:28,527 - DEBUG - [_trace.py:47] send_request_body.started request=<Request [b'POST']>
+2025-12-14 14:05:28,527 - DEBUG - [_trace.py:47] send_request_body.complete
+2025-12-14 14:05:28,527 - DEBUG - [_trace.py:47] receive_response_headers.started request=<Request [b'POST']>
+2025-12-14 14:05:32,319 - DEBUG - [_trace.py:47] receive_response_headers.complete return_value=(b'HTTP/1.1', 200, b'OK', [(b'Content-Type', b'text/event-stream'), (b'Content-Disposition', b'attachment'), (b'Vary', b'Origin'), (b'Vary', b'X-Origin'), (b'Vary', b'Referer'), (b'Transfer-Encoding', b'chunked'), (b'Date', b'Sun, 14 Dec 2025 05:05:33 GMT'), (b'Server', b'scaffolding on HTTPServer2'), (b'X-XSS-Protection', b'0'), (b'X-Frame-Options', b'SAMEORIGIN'), (b'X-Content-Type-Options', b'nosniff'), (b'Alt-Svc', b'h3=":443"; ma=2592000,h3-29=":443"; ma=2592000')])
+2025-12-14 14:05:32,319 - INFO - [_client.py:1025] HTTP Request: POST https://aiplatform.googleapis.com/v1/projects/psychic-apex-383707/locations/global/publishers/google/models/gemini-3-pro-preview:streamGenerateContent?alt=sse "HTTP/1.1 200 OK"
+2025-12-14 14:05:32,319 - DEBUG - [_trace.py:47] receive_response_body.started request=<Request [b'POST']>
+2025-12-14 14:05:32,321 - INFO - [vertex_ai_client.py:566] Thinking tokens used: None
+2025-12-14 14:05:32,321 - INFO - [vertex_ai_client.py:570] Cached tokens: None
+2025-12-14 14:05:34,872 - INFO - [vertex_ai_client.py:566] Thinking tokens used: None
+2025-12-14 14:05:34,872 - INFO - [vertex_ai_client.py:570] Cached tokens: None
+2025-12-14 14:05:37,568 - INFO - [vertex_ai_client.py:566] Thinking tokens used: None
+2025-12-14 14:05:37,568 - INFO - [vertex_ai_client.py:570] Cached tokens: None
+2025-12-14 14:05:38,583 - INFO - [vertex_ai_client.py:566] Thinking tokens used: None
+2025-12-14 14:05:38,583 - INFO - [vertex_ai_client.py:570] Cached tokens: None
+2025-12-14 14:05:38,722 - INFO - [vertex_ai_client.py:550] Streaming chunk: 42 chars, total: 0 chars
+2025-12-14 14:05:38,724 - INFO - [vertex_ai_client.py:566] Thinking tokens used: 645
+2025-12-14 14:05:38,725 - INFO - [vertex_ai_client.py:570] Cached tokens: None
+2025-12-14 14:05:38,917 - DEBUG - [_trace.py:47] receive_response_body.complete
+2025-12-14 14:05:38,918 - DEBUG - [_trace.py:47] response_closed.started
+2025-12-14 14:05:38,918 - DEBUG - [_trace.py:47] response_closed.complete
+2025-12-14 14:05:38,918 - INFO - [vertex_ai_client.py:648] Stream finished. Response length: 42, Thinking length: 0
+2025-12-14 14:05:38,918 - INFO - [vertex_ai_client.py:661] Estimated output tokens: 10 (including thinking)
+2025-12-14 14:05:38,918 - INFO - [vertex_ai_client.py:694] Output: Success - Response length: 42
+2025-12-14 14:05:38,918 - DEBUG - [vertex_ai_client.py:699] Response preview: こんちゃ！
+
+元気なご挨拶ありがとうございます。何かお手伝いできることはありますか？
+2025-12-14 14:05:38,918 - INFO - [vertex_ai_client.py:715] Estimated Total Cost: $0.000430 (Input: $0.000310 (155 tokens), Output: $0.000120 (10 tokens - estimated))
+2025-12-14 14:05:38,919 - DEBUG - [_trace.py:47] close.started
+2025-12-14 14:05:38,919 - DEBUG - [_trace.py:47] close.complete
+2025-12-14 14:05:38,920 - DEBUG - [main.py:731] Stream finished. Full raw length: 42
+2025-12-14 14:05:38,920 - INFO - [main.py:735] Final main text (first 200): こんちゃ！
+
+元気なご挨拶ありがとうございます。何かお手伝いできることはありますか？...
+2025-12-14 14:05:38,922 - DEBUG - [main.py:844] ファイル選択をリセットしました
+2025-12-14 14:05:38,922 - INFO - [conversation_manager.py:69] 会話履歴を保存しました: conversations/default.json (12 メッセージ)
+2025-12-14 14:05:38,923 - DEBUG - [main.py:299] 会話履歴を自動保存しました
+2025-12-14 14:05:38,926 - DEBUG - [_trace.py:47] close.started
+2025-12-14 14:05:38,926 - DEBUG - [_trace.py:47] close.complete
+2025-12-14 14:05:53,894 - DEBUG - [__init__.py:53] Flet View process 10585
+2025-12-14 14:05:53,895 - INFO - [main.py:1394] --- Application Finished ---
+2025-12-14 14:06:35,423 - INFO - [logger_setup.py:35] --- Logging Initialized (File: app.log, Console Level: INFO, MaxSize: 5.0MB, Backups: 3) ---
+2025-12-14 14:06:35,423 - INFO - [config_manager.py:26] Configuration loaded from config.json
+2025-12-14 14:06:35,961 - INFO - [vertex_ai_client.py:253] Using Application Default Credentials (ADC)
+2025-12-14 14:06:35,986 - INFO - [main.py:110] Gen AI initialized for project psychic-apex-383707 in global.
+2025-12-14 14:06:35,986 - INFO - [main.py:1392] Starting Flet app...
+2025-12-14 14:06:35,987 - DEBUG - [selector_events.py:54] Using selector: EpollSelector
+2025-12-14 14:06:35,990 - INFO - [__init__.py:62] Starting Flet View app...
+2025-12-14 14:06:35,990 - INFO - [__init__.py:190] Flet View found in: /home/hayvi/.flet/bin/flet-0.28.3
+2025-12-14 14:06:36,242 - INFO - [main.py:194] 日本語フォントを設定しました: /mnt/c/Windows/Fonts/meiryo.ttc (フォント名: Meiryo)
+2025-12-14 14:06:36,242 - INFO - [main.py:215] Main UI function started.
+2025-12-14 14:06:36,245 - WARNING - [main.py:1381] Set 'root_directory' in config.json
+2025-12-14 14:06:36,245 - INFO - [ui_components.py:119] Updating dropdown options: ['default'], current: default
+2025-12-14 14:06:36,246 - INFO - [ui_components.py:122] Dropdown value set to: default
+2025-12-14 14:06:36,248 - INFO - [main.py:969] セッション一覧を更新: ['default'], 現在のセッション: default
+2025-12-14 14:06:36,249 - INFO - [conversation_manager.py:98] 会話履歴を読み込みました: conversations/default.json (12 メッセージ)
+2025-12-14 14:06:36,253 - INFO - [main.py:285] 前回の会話を復元: 12 メッセージ
+2025-12-14 14:06:50,431 - DEBUG - [__init__.py:53] Flet View process 11119
+2025-12-14 14:06:50,432 - INFO - [main.py:1394] --- Application Finished ---
+2025-12-14 14:06:53,009 - INFO - [logger_setup.py:35] --- Logging Initialized (File: app.log, Console Level: INFO, MaxSize: 5.0MB, Backups: 3) ---
+2025-12-14 14:06:53,009 - INFO - [config_manager.py:26] Configuration loaded from config.json
+2025-12-14 14:06:53,538 - INFO - [vertex_ai_client.py:253] Using Application Default Credentials (ADC)
+2025-12-14 14:06:53,560 - INFO - [main.py:110] Gen AI initialized for project psychic-apex-383707 in global.
+2025-12-14 14:06:53,560 - INFO - [main.py:1392] Starting Flet app...
+2025-12-14 14:06:53,560 - DEBUG - [selector_events.py:54] Using selector: EpollSelector
+2025-12-14 14:06:53,563 - INFO - [__init__.py:62] Starting Flet View app...
+2025-12-14 14:06:53,564 - INFO - [__init__.py:190] Flet View found in: /home/hayvi/.flet/bin/flet-0.28.3
+2025-12-14 14:06:53,848 - INFO - [main.py:194] 日本語フォントを設定しました: /mnt/c/Windows/Fonts/meiryo.ttc (フォント名: Meiryo)
+2025-12-14 14:06:53,848 - INFO - [main.py:215] Main UI function started.
+2025-12-14 14:06:53,851 - WARNING - [main.py:1381] Set 'root_directory' in config.json
+2025-12-14 14:06:53,852 - INFO - [ui_components.py:119] Updating dropdown options: ['default'], current: default
+2025-12-14 14:06:53,852 - INFO - [ui_components.py:122] Dropdown value set to: default
+2025-12-14 14:06:53,854 - INFO - [main.py:969] セッション一覧を更新: ['default'], 現在のセッション: default
+2025-12-14 14:06:53,854 - INFO - [conversation_manager.py:98] 会話履歴を読み込みました: conversations/default.json (12 メッセージ)
+2025-12-14 14:06:53,856 - INFO - [main.py:285] 前回の会話を復元: 12 メッセージ
+2025-12-14 14:07:01,925 - DEBUG - [__init__.py:53] Flet View process 11319
+2025-12-14 14:07:01,926 - INFO - [main.py:1394] --- Application Finished ---
+2025-12-14 14:07:10,673 - INFO - [logger_setup.py:35] --- Logging Initialized (File: app.log, Console Level: INFO, MaxSize: 5.0MB, Backups: 3) ---
+2025-12-14 14:07:10,673 - INFO - [config_manager.py:26] Configuration loaded from config.json
+2025-12-14 14:07:11,219 - INFO - [vertex_ai_client.py:253] Using Application Default Credentials (ADC)
+2025-12-14 14:07:11,241 - INFO - [main.py:110] Gen AI initialized for project psychic-apex-383707 in global.
+2025-12-14 14:07:11,241 - INFO - [main.py:1392] Starting Flet app...
+2025-12-14 14:07:11,241 - DEBUG - [selector_events.py:54] Using selector: EpollSelector
+2025-12-14 14:07:11,244 - INFO - [__init__.py:62] Starting Flet View app...
+2025-12-14 14:07:11,245 - INFO - [__init__.py:190] Flet View found in: /home/hayvi/.flet/bin/flet-0.28.3
+2025-12-14 14:07:11,509 - INFO - [main.py:194] 日本語フォントを設定しました: /mnt/c/Windows/Fonts/meiryo.ttc (フォント名: Meiryo)
+2025-12-14 14:07:11,509 - INFO - [main.py:215] Main UI function started.
+2025-12-14 14:07:11,513 - WARNING - [main.py:1381] Set 'root_directory' in config.json
+2025-12-14 14:07:11,514 - INFO - [ui_components.py:119] Updating dropdown options: ['default'], current: default
+2025-12-14 14:07:11,514 - INFO - [ui_components.py:122] Dropdown value set to: default
+2025-12-14 14:07:11,516 - INFO - [main.py:969] セッション一覧を更新: ['default'], 現在のセッション: default
+2025-12-14 14:07:11,517 - INFO - [conversation_manager.py:98] 会話履歴を読み込みました: conversations/default.json (12 メッセージ)
+2025-12-14 14:07:11,518 - INFO - [main.py:285] 前回の会話を復元: 12 メッセージ
+2025-12-14 14:07:38,254 - DEBUG - [__init__.py:53] Flet View process 11506
+2025-12-14 14:07:38,255 - INFO - [main.py:1394] --- Application Finished ---

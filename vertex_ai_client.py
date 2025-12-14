@@ -2,8 +2,9 @@ import logging
 import time
 import os
 from google import genai
-from google.genai.types import GenerateContentConfig, ThinkingConfig, HttpOptions
+from google.genai.types import GenerateContentConfig, ThinkingConfig, HttpOptions, Tool, GoogleSearch
 from config_manager import get_config
+from google.oauth2 import service_account
 
 # リトライ設定
 MAX_RETRIES = 3  # 最大リトライ回数
@@ -210,6 +211,48 @@ def setup_gen_ai_env():
         os.environ['GOOGLE_GENAI_USE_VERTEXAI'] = 'True'
     # プロジェクトIDと場所は既にVertex AIの初期化で設定されているはず
 
+def get_credentials():
+    """
+    Google Cloud認証情報を取得する
+    
+    優先順位:
+    1. 環境変数 GOOGLE_APPLICATION_CREDENTIALS が設定されている場合
+    2. config.json の service_account_key_path が設定されている場合
+    3. Application Default Credentials (ADC) を使用（デフォルト）
+    
+    Returns:
+        credentials: Google認証情報オブジェクト、またはNone（ADCを使用する場合）
+    """
+    # 1. 環境変数をチェック
+    env_credentials_path = os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
+    if env_credentials_path and os.path.exists(env_credentials_path):
+        logging.info(f"Using credentials from environment variable: {env_credentials_path}")
+        try:
+            credentials, _ = load_credentials_from_file(env_credentials_path)
+            return credentials
+        except Exception as e:
+            logging.warning(f"Failed to load credentials from environment variable: {e}")
+    
+    # 2. config.jsonからサービスアカウントキーパスを取得
+    try:
+        config = get_config()
+        service_account_path = config.get("service_account_key_path")
+        if service_account_path and os.path.exists(service_account_path):
+            logging.info(f"Using credentials from config.json: {service_account_path}")
+            try:
+                credentials = service_account.Credentials.from_service_account_file(
+                    service_account_path
+                )
+                return credentials
+            except Exception as e:
+                logging.warning(f"Failed to load credentials from config.json: {e}")
+    except Exception as e:
+        logging.warning(f"Error reading config for credentials: {e}")
+    
+    # 3. Application Default Credentials (ADC) を使用
+    logging.info("Using Application Default Credentials (ADC)")
+    return None
+
 def calculate_cost(input_tokens: int | None, output_tokens: int | None) -> tuple[float | None, float | None, float | None]:
     """
     Calculates the estimated input, output, and total costs based on token counts.
@@ -248,6 +291,8 @@ def generate_gemini_response(
     stream_update_callback,
     thinking_budget: int = 0,  # 0 = 思考無効、それ以外 = 思考有効（バジェット）
     thinking_auto_budget: bool = False,  # 自動バジェット設定
+    thinking_level_high: bool = True,  # Gemini 3.0 Pro用: True=HIGH, False=LOW
+    use_google_search: bool = False,  # Google Search Toolを使用するか
     ):
     """
     Sends request to Vertex AI Gemini model using Google Gen AI SDK and streams the response.
@@ -259,8 +304,10 @@ def generate_gemini_response(
         generation_config: Configuration for generation (temp, tokens, etc.).
         safety_settings: Safety settings dictionary (for compatibility, but Gen AI SDK handles this differently).
         stream_update_callback: A function to call with each received text chunk.
-        thinking_budget: Token budget for thinking (0 to disable thinking).
-        thinking_auto_budget: Whether to use automatic thinking budget optimization.
+        thinking_budget: Token budget for thinking (0 to disable thinking). Not used for Gemini 3.0 Pro.
+        thinking_auto_budget: Whether to use automatic thinking budget optimization. Not used for Gemini 3.0 Pro.
+        thinking_level_high: For Gemini 3.0 Pro only: True for HIGH level, False for LOW level.
+        use_google_search: Whether to enable Google Search Tool for grounding.
 
     Returns:
         A tuple containing:
@@ -273,6 +320,7 @@ def generate_gemini_response(
         - Estimated output cost (float or None).
         - Estimated total cost (float or None).
         - Thinking text (str or None).
+        - Grounding sources (list of dict with 'uri' and optional 'title').
     """
     full_response_text = ""
     full_thinking_text = ""
@@ -286,6 +334,7 @@ def generate_gemini_response(
     total_cost = None
     last_update_time = time.time()
     update_interval = 0.05
+    grounding_sources = []  # グラウンディングソース情報
 
     try:
         # 環境変数設定
@@ -303,20 +352,48 @@ def generate_gemini_response(
                 raise ValueError("Project ID not properly configured in config.json")
             if not location or location == "YOUR_LOCATION":
                 raise ValueError("Location not properly configured in config.json")
-                
+            
+            # 認証情報を取得
+            credentials = get_credentials()
+            
             # Vertex AI環境での認証設定
-            client = genai.Client(
-                http_options=HttpOptions(api_version="v1"),
-                vertexai=True,
-                project=project_id,
-                location=location
-            )
+            client_kwargs = {
+                "http_options": HttpOptions(api_version="v1"),
+                "vertexai": True,
+                "project": project_id,
+                "location": location
+            }
+            
+            # 認証情報が取得できた場合は明示的に設定
+            if credentials:
+                client_kwargs["credentials"] = credentials
+                logging.info("Using explicit credentials for authentication")
+            else:
+                logging.info("Using Application Default Credentials (ADC) for authentication")
+            
+            client = genai.Client(**client_kwargs)
             
             logging.info(f"Initialized Gen AI client for project: {project_id}, location: {location}")
             
         except Exception as client_init_err:
-            logging.error(f"Failed to initialize Gen AI client: {client_init_err}")
-            raise ValueError(f"Gen AI client initialization failed: {client_init_err}")
+            error_str = str(client_init_err)
+            # Application Default Credentials エラーの場合、詳細な案内を表示
+            if "DefaultCredentialsError" in str(type(client_init_err).__name__) or "default credentials" in error_str.lower():
+                helpful_msg = (
+                    f"認証エラー: Application Default Credentials (ADC) が設定されていません。\n"
+                    f"以下のコマンドを実行して認証を設定してください:\n"
+                    f"  gcloud auth application-default login\n\n"
+                    f"WSL環境の場合:\n"
+                    f"  1. 上記コマンドを実行すると認証URLが表示されます\n"
+                    f"  2. Windows側のブラウザでそのURLを開いてください\n"
+                    f"  3. 表示された認証コードをターミナルに入力してください\n\n"
+                    f"元のエラー: {error_str}"
+                )
+                logging.error(helpful_msg)
+                raise ValueError(helpful_msg)
+            else:
+                logging.error(f"Failed to initialize Gen AI client: {client_init_err}")
+                raise ValueError(f"Gen AI client initialization failed: {client_init_err}")
 
         logging.info(f"Sending request to model: {model_name}")
 
@@ -367,34 +444,86 @@ def generate_gemini_response(
         config_kwargs = {}
         
         # Thinking設定 - モデル別に対応
-        thinking_enabled = thinking_budget != 0  # 0以外で有効（-1も含む）
-        has_thinking = thinking_enabled
-        
         model_lower = model_name.lower()
-        is_flash_model = "flash" in model_lower
-        is_pro_model = "pro" in model_lower
+        is_gemini_3_pro = "3-pro" in model_lower or "gemini-3-pro" in model_lower
         
-        if thinking_enabled:
-            thinking_config = {"include_thoughts": True}
-            
-            if thinking_budget == -1 or thinking_auto_budget:
-                # 自動バジェット設定（-1で自動制御）
-                logging.info(f"Using automatic thinking budget (-1) for {model_name}")
-                # thinking_budgetは設定しない（デフォルトで自動）
-            elif thinking_budget > 0:
-                # 手動バジェット設定
-                thinking_config["thinking_budget"] = thinking_budget
-                logging.info(f"Thinking enabled with manual budget: {thinking_budget} for {model_name}")
-            
-            config_kwargs["thinking_config"] = ThinkingConfig(**thinking_config)
+        if is_gemini_3_pro:
+            # Gemini 3.0 Pro: thinking_levelを使用（文字列リテラル）
+            # 注意: 現在のSDKではThinkingConfigにthinking_levelパラメータが存在しないため、
+            # ThinkingConfigを作成してからmodel_dump()で辞書化し、thinking_levelを追加
+            thinking_enabled = thinking_budget != 0  # 0以外で有効
+            if thinking_enabled:
+                thinking_level_value = "high" if thinking_level_high else "low"
+                # ThinkingConfigを作成（includeThoughts=Trueで有効化）
+                thinking_config_obj = ThinkingConfig(includeThoughts=True)
+                # model_dump()で辞書化し、thinking_levelを追加
+                thinking_config_dict = thinking_config_obj.model_dump()
+                thinking_config_dict["thinking_level"] = thinking_level_value
+                # 辞書をThinkingConfigとして再構築（thinking_levelは無視されるが、後で追加される）
+                # 実際のAPIリクエストでは辞書が使用されるため、thinking_levelが含まれる
+                config_kwargs["thinking_config"] = thinking_config_dict
+                logging.info(f"Thinking enabled for {model_name} with level: {thinking_level_value}")
+            else:
+                logging.info(f"Thinking disabled for {model_name} (budget = 0)")
+            has_thinking = thinking_enabled
         else:
-            logging.info("Thinking disabled (budget = 0)")
+            # その他のモデル: thinking_budgetを使用
+            thinking_enabled = thinking_budget != 0  # 0以外で有効（-1も含む）
+            has_thinking = thinking_enabled
+            
+            if thinking_enabled:
+                thinking_config = {"include_thoughts": True}
+                
+                if thinking_budget == -1 or thinking_auto_budget:
+                    # 自動バジェット設定（-1で自動制御）
+                    logging.info(f"Using automatic thinking budget (-1) for {model_name}")
+                    # thinking_budgetは設定しない（デフォルトで自動）
+                elif thinking_budget > 0:
+                    # 手動バジェット設定
+                    thinking_config["thinking_budget"] = thinking_budget
+                    logging.info(f"Thinking enabled with manual budget: {thinking_budget} for {model_name}")
+                
+                config_kwargs["thinking_config"] = ThinkingConfig(**thinking_config)
+            else:
+                logging.info("Thinking disabled (budget = 0)")
+        
+        # Google Search Tool設定
+        if use_google_search:
+            config_kwargs["tools"] = [Tool(google_search=GoogleSearch())]
+            logging.info(f"Google Search Tool enabled for {model_name}")
         
         # Generation config
         if generation_config:
             config_kwargs.update(generation_config)
 
+        # Gemini 3.0 Proの場合、thinking_levelを後で追加するため、辞書形式を保持
+        thinking_level_to_add = None
+        if is_gemini_3_pro and thinking_enabled:
+            # thinking_configが辞書形式の場合、thinking_levelを保存
+            if isinstance(config_kwargs.get("thinking_config"), dict):
+                thinking_level_to_add = config_kwargs["thinking_config"].get("thinking_level")
+                # thinking_configからthinking_levelを一時的に削除（GenerateContentConfig作成のため）
+                thinking_config_dict = config_kwargs["thinking_config"].copy()
+                thinking_config_dict.pop("thinking_level", None)
+                # ThinkingConfigオブジェクトを作成
+                config_kwargs["thinking_config"] = ThinkingConfig(**thinking_config_dict)
+
         generation_config_obj = GenerateContentConfig(**config_kwargs) if config_kwargs else None
+        
+        # Gemini 3.0 Proの場合、thinking_levelを追加
+        # 注意: SDKの制限により、thinking_levelはGenerateContentConfigのスキーマに含まれない
+        # そのため、model_dump()で辞書を取得し、thinking_levelを追加してからmodel_constructで再構築
+        # model_constructは検証をスキップするため、thinking_levelが含まれたままになる
+        if is_gemini_3_pro and thinking_level_to_add and generation_config_obj:
+            # model_dump()で辞書を取得し、thinking_levelを追加
+            config_dict = generation_config_obj.model_dump()
+            if "thinking_config" in config_dict and isinstance(config_dict["thinking_config"], dict):
+                # thinking_levelを辞書に追加
+                config_dict["thinking_config"]["thinking_level"] = thinking_level_to_add
+                # model_constructを使用して再構築（検証をスキップ）
+                # thinking_configは辞書形式のまま（SDKが内部的に辞書に変換する際にthinking_levelが含まれる）
+                generation_config_obj = GenerateContentConfig.model_construct(**config_dict)
+                logging.info(f"Added thinking_level={thinking_level_to_add} to config using model_construct")
 
         # リトライループでストリーミング生成を実行
         thinking_token_count = 0
@@ -421,8 +550,11 @@ def generate_gemini_response(
                 
                 # リアルタイムストリーミング処理
                 stream_completed = False
+                last_chunk = None  # 最後のチャンクを保存（グラウンディングメタデータ用）
                 for chunk in response_stream:
                     try:
+                        last_chunk = chunk  # 最後のチャンクを保存
+                        
                         # チャンクからテキストを抽出
                         chunk_text = ""
                         if hasattr(chunk, 'text') and chunk.text:
@@ -452,9 +584,47 @@ def generate_gemini_response(
                                 cached_token_count = chunk.usage_metadata.cached_tokens
                                 logging.info(f"Cached tokens: {cached_token_count}")
                         
+                        # グラウンディングメタデータの取得を試行
+                        if use_google_search and hasattr(chunk, 'candidates') and chunk.candidates:
+                            try:
+                                for candidate in chunk.candidates:
+                                    if hasattr(candidate, 'grounding_metadata'):
+                                        grounding_metadata = candidate.grounding_metadata
+                                        if hasattr(grounding_metadata, 'grounding_chunks'):
+                                            for gc in grounding_metadata.grounding_chunks:
+                                                if hasattr(gc, 'web') and hasattr(gc.web, 'uri'):
+                                                    source_info = {'uri': gc.web.uri}
+                                                    if hasattr(gc.web, 'title') and gc.web.title:
+                                                        source_info['title'] = gc.web.title
+                                                    # 重複を避ける
+                                                    if source_info not in grounding_sources:
+                                                        grounding_sources.append(source_info)
+                                                        logging.info(f"Found grounding source: {source_info.get('uri', 'N/A')}")
+                            except Exception as grounding_err:
+                                logging.warning(f"Error extracting grounding metadata: {grounding_err}")
+                        
                     except Exception as chunk_proc_err:
                         logging.error(f"Error processing stream chunk: {chunk_proc_err}", exc_info=True)
                         continue
+                
+                # ストリーミング完了後、最後のチャンクからもグラウンディングメタデータを取得
+                if use_google_search and last_chunk and not grounding_sources:
+                    try:
+                        if hasattr(last_chunk, 'candidates') and last_chunk.candidates:
+                            for candidate in last_chunk.candidates:
+                                if hasattr(candidate, 'grounding_metadata'):
+                                    grounding_metadata = candidate.grounding_metadata
+                                    if hasattr(grounding_metadata, 'grounding_chunks'):
+                                        for gc in grounding_metadata.grounding_chunks:
+                                            if hasattr(gc, 'web') and hasattr(gc.web, 'uri'):
+                                                source_info = {'uri': gc.web.uri}
+                                                if hasattr(gc.web, 'title') and gc.web.title:
+                                                    source_info['title'] = gc.web.title
+                                                if source_info not in grounding_sources:
+                                                    grounding_sources.append(source_info)
+                                                    logging.info(f"Found grounding source from last chunk: {source_info.get('uri', 'N/A')}")
+                    except Exception as last_chunk_err:
+                        logging.warning(f"Error extracting grounding metadata from last chunk: {last_chunk_err}")
                 
                 # キャンセルされた場合はループを抜ける
                 if error_message == "キャンセルされました":
@@ -493,9 +663,24 @@ def generate_gemini_response(
                 else:
                     # リトライ不可能なエラー、または最大リトライ回数に達した場合
                     logging.error(f"Error during streaming (non-retryable or max retries reached): {stream_err}", exc_info=True)
-                    error_message = f"Streaming error: {stream_err}"
-                    if retry_count >= MAX_RETRIES:
-                        error_message += f" (リトライ {MAX_RETRIES}回試行しましたが失敗しました)"
+                    
+                    # Application Default Credentials エラーの場合、詳細な案内を表示
+                    if "DefaultCredentialsError" in str(type(stream_err).__name__) or "default credentials" in error_str.lower():
+                        helpful_msg = (
+                            f"認証エラー: Application Default Credentials (ADC) が設定されていません。\n"
+                            f"以下のコマンドを実行して認証を設定してください:\n"
+                            f"  gcloud auth application-default login\n\n"
+                            f"WSL環境の場合:\n"
+                            f"  1. 上記コマンドを実行すると認証URLが表示されます\n"
+                            f"  2. Windows側のブラウザでそのURLを開いてください\n"
+                            f"  3. 表示された認証コードをターミナルに入力してください\n\n"
+                            f"元のエラー: {error_str}"
+                        )
+                        error_message = helpful_msg
+                    else:
+                        error_message = f"Streaming error: {stream_err}"
+                        if retry_count >= MAX_RETRIES:
+                            error_message += f" (リトライ {MAX_RETRIES}回試行しましたが失敗しました)"
                     break
 
         # 思考テキストの抽出 - 最終レスポンスから
@@ -533,8 +718,24 @@ def generate_gemini_response(
             final_model_content = Content(parts=[Part.from_text("Error constructing final content.")], role="model")
 
     except Exception as api_err:
-        error_message = f"Error during API call/streaming: {api_err}"
-        logging.error(error_message, exc_info=True)
+        error_str = str(api_err)
+        # Application Default Credentials エラーの場合、詳細な案内を表示
+        if "DefaultCredentialsError" in str(type(api_err).__name__) or "default credentials" in error_str.lower():
+            helpful_msg = (
+                f"認証エラー: Application Default Credentials (ADC) が設定されていません。\n"
+                f"以下のコマンドを実行して認証を設定してください:\n"
+                f"  gcloud auth application-default login\n\n"
+                f"WSL環境の場合:\n"
+                f"  1. 上記コマンドを実行すると認証URLが表示されます\n"
+                f"  2. Windows側のブラウザでそのURLを開いてください\n"
+                f"  3. 表示された認証コードをターミナルに入力してください\n\n"
+                f"元のエラー: {error_str}"
+            )
+            error_message = helpful_msg
+            logging.error(helpful_msg, exc_info=True)
+        else:
+            error_message = f"Error during API call/streaming: {api_err}"
+            logging.error(error_message, exc_info=True)
 
     # ログ出力
     if error_message:
@@ -565,5 +766,5 @@ def generate_gemini_response(
     else:
         logging.warning("Could not calculate estimated cost (input tokens unavailable).")
 
-    # Return calculated/estimated tokens, costs, thinking text, and thinking token count
-    return full_response_text, final_model_content, error_message, input_token_count, output_token_count, input_cost, output_cost, total_cost, full_thinking_text, thinking_token_count
+    # Return calculated/estimated tokens, costs, thinking text, thinking token count, and grounding sources
+    return full_response_text, final_model_content, error_message, input_token_count, output_token_count, input_cost, output_cost, total_cost, full_thinking_text, thinking_token_count, grounding_sources

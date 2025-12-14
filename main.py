@@ -18,7 +18,9 @@ from ui_components import (
     conversation_history,
     is_sending, cancel_requested,
     thinking_budget_slider, thinking_budget_label, thinking_auto_budget_switch,
+    thinking_level_dropdown,
     system_prompt_template_dropdown,
+    grounding_switch,
     # Session management components
     session_dropdown, new_session_name_field, create_session_button,
     delete_session_button, session_info_text, update_session_dropdown_options,
@@ -88,12 +90,23 @@ try:
         os.environ['GOOGLE_CLOUD_LOCATION'] = location
         
         from google.genai.types import HttpOptions
-        client = genai.Client(
-            http_options=HttpOptions(api_version="v1"),
-            vertexai=True,
-            project=project_id,
-            location=location
-        )
+        from vertex_ai_client import get_credentials
+        
+        # 認証情報を取得
+        credentials = get_credentials()
+        
+        client_kwargs = {
+            "http_options": HttpOptions(api_version="v1"),
+            "vertexai": True,
+            "project": project_id,
+            "location": location
+        }
+        
+        # 認証情報が取得できた場合は明示的に設定
+        if credentials:
+            client_kwargs["credentials"] = credentials
+        
+        client = genai.Client(**client_kwargs)
         gen_ai_initialized = True
         logging.info(f"Gen AI initialized for project {project_id} in {location}.")
         print(f"Gen AI initialized for project {project_id} in {location}.")
@@ -628,25 +641,43 @@ def main(page: ft.Page):
                 "max_output_tokens": selected_max_tokens
             }
 
-            # Thinking設定を取得（表示はしないが機能は有効）
-            thinking_auto = thinking_auto_budget_switch.value
-            if thinking_auto:
-                # 自動バジェット：-1を送信
-                thinking_budget = -1
-                logging.debug(f"自動思考バジェット使用: -1")
+            # Thinking設定を取得（モデルに応じてthinking_levelまたはthinking_budgetを使用）
+            model_lower = selected_model_name.lower()
+            is_gemini_3_pro = "3-pro" in model_lower or "gemini-3-pro" in model_lower
+            
+            if is_gemini_3_pro:
+                # Gemini 3.0 Pro: thinking_levelを使用
+                thinking_level_value = thinking_level_dropdown.value
+                thinking_level_high = thinking_level_value == "HIGH"
+                thinking_budget = 1 if thinking_level_high else 0  # 有効化のため（実際には使用されない）
+                thinking_auto = False
+                logging.debug(f"Gemini 3.0 Pro: thinking_level={thinking_level_value} (high={thinking_level_high})")
             else:
-                # 手動バジェット：UI設定値を使用
-                thinking_budget = int(thinking_budget_slider.value)
-                logging.debug(f"手動思考バジェット値: {thinking_budget}")
+                # その他のモデル: thinking_budgetを使用
+                thinking_auto = thinking_auto_budget_switch.value
+                if thinking_auto:
+                    # 自動バジェット：-1を送信
+                    thinking_budget = -1
+                    logging.debug(f"自動思考バジェット使用: -1")
+                else:
+                    # 手動バジェット：UI設定値を使用
+                    thinking_budget = int(thinking_budget_slider.value)
+                    logging.debug(f"手動思考バジェット値: {thinking_budget}")
+                thinking_level_high = True  # デフォルト値（使用されない）
 
             status_bar.value = f"Sending to {selected_model_name}..."; page.update()
 
-            full_response_text, final_model_content, api_error_message, input_tokens, output_tokens, input_cost, output_cost, total_cost, thinking_text, thinking_tokens = generate_gemini_response(
+            # グラウンディング設定を取得
+            use_google_search = grounding_switch.value if grounding_switch else False
+
+            full_response_text, final_model_content, api_error_message, input_tokens, output_tokens, input_cost, output_cost, total_cost, thinking_text, thinking_tokens, grounding_sources = generate_gemini_response(
                 model_name=selected_model_name, system_instruction=system_instruction,
                 contents=conversation_history + [current_content], generation_config=generation_config,
                 safety_settings={}, stream_update_callback=stream_callback,
                 thinking_budget=thinking_budget,  # 自動(-1)または手動設定値
-                thinking_auto_budget=thinking_auto  # UI設定を使用
+                thinking_auto_budget=thinking_auto,  # UI設定を使用
+                thinking_level_high=thinking_level_high,  # Gemini 3.0 Pro用
+                use_google_search=use_google_search  # Google Search Toolを使用するか
             )
 
             # 入力・出力情報を統合して表示
@@ -749,9 +780,67 @@ def main(page: ft.Page):
 
                 try:
                     response_row_index = chat_history_display.controls.index(response_row)
+                    # グラウンディングソース情報を表示
+                    if grounding_sources and len(grounding_sources) > 0:
+                        sources_text_parts = ["**情報源:**"]
+                        for idx, source in enumerate(grounding_sources, 1):
+                            uri = source.get('uri', '')
+                            title = source.get('title', '')
+                            if title:
+                                sources_text_parts.append(f"{idx}. [{title}]({uri})")
+                            else:
+                                sources_text_parts.append(f"{idx}. {uri}")
+                        
+                        sources_md = ft.Markdown(
+                            "\n".join(sources_text_parts),
+                            selectable=True,
+                            extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
+                            auto_follow_links=True,
+                            on_tap_link=lambda e: page.launch_url(e.data)
+                        )
+                        sources_container = ft.Container(
+                            content=sources_md,
+                            padding=ft.padding.symmetric(horizontal=10, vertical=8),
+                            bgcolor="#2d4a2d4D",  # 緑系の背景色（グラウンディング用）
+                            border_radius=ft.border_radius.all(8),
+                            margin=ft.margin.only(bottom=5),
+                            width=None,
+                            expand=True
+                        )
+                        chat_history_display.controls.insert(response_row_index + 1, sources_container)
+                        response_row_index += 1  # インデックスを調整
+                    
                     chat_history_display.controls.insert(response_row_index + 1, controls_below_response)
                 except ValueError:
                     logging.warning("Could not find response_row to insert controls below, appending instead.")
+                    # グラウンディングソース情報を表示
+                    if grounding_sources and len(grounding_sources) > 0:
+                        sources_text_parts = ["**情報源:**"]
+                        for idx, source in enumerate(grounding_sources, 1):
+                            uri = source.get('uri', '')
+                            title = source.get('title', '')
+                            if title:
+                                sources_text_parts.append(f"{idx}. [{title}]({uri})")
+                            else:
+                                sources_text_parts.append(f"{idx}. {uri}")
+                        
+                        sources_md = ft.Markdown(
+                            "\n".join(sources_text_parts),
+                            selectable=True,
+                            extension_set=ft.MarkdownExtensionSet.GITHUB_WEB,
+                            auto_follow_links=True,
+                            on_tap_link=lambda e: page.launch_url(e.data)
+                        )
+                        sources_container = ft.Container(
+                            content=sources_md,
+                            padding=ft.padding.symmetric(horizontal=10, vertical=8),
+                            bgcolor="#2d4a2d4D",
+                            border_radius=ft.border_radius.all(8),
+                            margin=ft.margin.only(bottom=5),
+                            width=None,
+                            expand=True
+                        )
+                        chat_history_display.controls.append(sources_container)
                     chat_history_display.controls.append(controls_below_response)
 
                 status_bar.value = "✓ Response received."
@@ -885,9 +974,12 @@ def main(page: ft.Page):
         ft.Row([
             thinking_auto_budget_switch,  # 自動バジェットスイッチ
             ft.VerticalDivider(width=5),
-            ft.Text("Budget:", width=50, tooltip="思考バジェット (0=無効)", color=ft.Colors.ON_SURFACE),
+            ft.Text("Budget", width=50, tooltip="思考バジェット (0=無効)", color=ft.Colors.ON_SURFACE),
             thinking_budget_label,
             thinking_budget_slider,
+            thinking_level_dropdown,  # Gemini 3.0 Pro用（モデルに応じて表示/非表示）
+            ft.VerticalDivider(width=5),
+            grounding_switch,  # グラウンディングスイッチ
         ], alignment=ft.MainAxisAlignment.START, vertical_alignment=ft.CrossAxisAlignment.CENTER, spacing=5, wrap=False),
         ft.Row([
             system_prompt_template_dropdown,
