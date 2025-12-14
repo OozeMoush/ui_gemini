@@ -129,7 +129,7 @@ def get_accurate_token_count(client, model_name: str, contents: list, system_ins
         estimated_input_tokens = sum(len(content["parts"][0]["text"]) for content in gen_ai_contents) // 4
         return estimated_input_tokens, 0
 
-def calculate_cost_accurate(model_name: str, input_tokens: int, output_tokens: int, has_thinking: bool = False, cached_tokens: int = 0) -> tuple[float, float, float]:
+def calculate_cost_accurate(model_name: str, input_tokens: int, output_tokens: int, has_thinking: bool = False, cached_tokens: int = 0, use_google_search: bool = False) -> tuple[float, float, float]:
     """
     正確な料金体系に基づいてコストを計算する
     
@@ -139,6 +139,7 @@ def calculate_cost_accurate(model_name: str, input_tokens: int, output_tokens: i
         output_tokens: 出力トークン数  
         has_thinking: 思考トークンが含まれているか
         cached_tokens: キャッシュされたトークン数（通常のInputトークンの約1/10の価格）
+        use_google_search: Google Search Toolを使用しているか
         
     Returns:
         tuple[input_cost, output_cost, total_cost]
@@ -202,7 +203,20 @@ def calculate_cost_accurate(model_name: str, input_tokens: int, output_tokens: i
             
         output_cost = (output_tokens / 1_000_000) * output_price
 
-    total_cost = input_cost + output_cost
+    # Google Search Toolの追加料金を計算
+    google_search_cost = 0.0
+    if use_google_search:
+        # Google Search Toolの料金設定を取得
+        config = get_config()
+        google_search_pricing = config.get("google_search_pricing", {})
+        # デフォルト値: 1,000リクエストごとに$35 → 1リクエストあたり$0.035
+        # 無料枠（1日あたり1,500リクエスト）の考慮は実装が複雑なため、ここでは全リクエストに課金
+        # 実際の使用量に応じて調整が必要な場合は、別途実装が必要
+        cost_per_request = google_search_pricing.get("cost_per_request", 0.035)  # $0.035 per request
+        google_search_cost = cost_per_request
+        logging.info(f"Google Search Tool cost: ${google_search_cost:.6f} per request")
+
+    total_cost = input_cost + output_cost + google_search_cost
     return input_cost, output_cost, total_cost
 
 def setup_gen_ai_env():
@@ -750,18 +764,20 @@ def generate_gemini_response(
     else:
         logging.info("Output: Empty response received.")
 
-    # コスト計算（キャッシュトークン数を考慮）
+    # コスト計算（キャッシュトークン数とGoogle Search Toolを考慮）
     input_cost, output_cost, total_cost = calculate_cost_accurate(
         model_name, 
         input_token_count or 0, 
         output_token_count or 0, 
         has_thinking and bool(full_thinking_text),
-        cached_token_count
+        cached_token_count,
+        use_google_search
     )
 
     if total_cost is not None:
         cache_info = f" (cached: {cached_token_count})" if cached_token_count and cached_token_count > 0 else ""
-        log_cost_detail = f"Input: ${input_cost:.6f} ({input_token_count} tokens{cache_info}), Output: ${output_cost:.6f} ({output_token_count} tokens - estimated)"
+        google_search_info = f", Google Search: ${total_cost - input_cost - output_cost:.6f}" if use_google_search else ""
+        log_cost_detail = f"Input: ${input_cost:.6f} ({input_token_count} tokens{cache_info}), Output: ${output_cost:.6f} ({output_token_count} tokens - estimated){google_search_info}"
         logging.info(f"Estimated Total Cost: ${total_cost:.6f} ({log_cost_detail})")
     else:
         logging.warning("Could not calculate estimated cost (input tokens unavailable).")

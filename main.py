@@ -708,6 +708,14 @@ def main(page: ft.Page):
                     output_info += f" | ¥{output_yen:.2f}"
                 info_parts.append(output_info)
             
+            # Google Search Toolの追加料金情報
+            if use_google_search and input_cost is not None and output_cost is not None and total_cost is not None:
+                google_search_cost = total_cost - input_cost - output_cost
+                if google_search_cost > 0:
+                    google_search_yen = google_search_cost * exchange_rate
+                    google_search_info = f"Google Search: ¥{google_search_yen:.2f}"
+                    info_parts.append(google_search_info)
+            
             # 合計コスト
             cost_breakdown_available = input_cost is not None and output_cost is not None and total_cost is not None
             if cost_breakdown_available or total_cost is not None:

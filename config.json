@@ -12,11 +12,16 @@
     "gemini-1.5-flash-002",
     "gemini-1.5-flash-8b-001"
   ],
-  "default_model": "gemini-2.5-pro",
+  "default_model": "gemini-3-pro-preview",
   "default_temperature": 1.0,
   "default_max_output_tokens": 65535,
   "default_system_prompt": "日本語で回答してください。",
   "exchange_rate": 155.0,
+  "google_search_pricing": {
+    "cost_per_request": 0.035,
+    "free_quota_per_day": 1500,
+    "note": "Google Search Toolの料金: 1日あたり1,500リクエストまで無料、超過分は1,000リクエストごとに$35（1リクエストあたり$0.035）。無料枠の考慮は実装が複雑なため、現在は全リクエストに課金しています。"
+  },
   "model_pricing": {
     "default": { "input": 1.25, "output": 10.0, "cached_input": 0.125 },
     "gemini-2.5-flash": { "input": 0.15, "output": 0.60, "output_thinking": 3.50, "cached_input": 0.015 },
